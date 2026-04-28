@@ -14,7 +14,8 @@ add_library(native-lib
             SHARED
 
             vulkan_renderer.cpp
-            #main_menu.c
+            main_menu.cpp
+            model_processor.cpp
             native-lib.cpp)
 
 

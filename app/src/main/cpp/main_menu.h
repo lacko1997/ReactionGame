@@ -6,8 +6,8 @@
 #define REACTIONGAME_MAIN_MENU_H
 
 #include <stdlib.h>
-#include <vulkan/vulkan.h>
+#include "vulkan_renderer.h"
 
-VkResult makeCommandBuffers();
+void makeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height);
 
 #endif //REACTIONGAME_MAIN_MENU_H

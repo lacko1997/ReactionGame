@@ -1,103 +1,78 @@
 //
 // Created by lacko on 3/28/26.
 //
+
 #include "main_menu.h"
 
-#include "vulkan_renderer.h"
+#include <string.h>
+#include <android/log.h>
+#include "scene_elements.h"
 
-static float pushConstant[16] =
-        {
-            1.0f,  0.0f, 0.0f, 0.0f,
-            0.0f, -1.0f, 0.0f, 0.0f,
-            0.0f,  0.0f, 0.5f, 0.0f,
-            0.0f,  0.0f, 0.0f, 1.0f
-        };
+static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene);
+static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height);
 
-VkResult makeCommandBuffers(EngineBase *base, RenderRes *resource, RenderScene *scene)
+void makeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
+{
+    CHECK_RESULT(createCommandBuffers(base, scene));
+    CHECK_RESULT(recordCommandBuffer(base, scene, width, height));
+}
+
+static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene)
 {
     VkCommandBufferAllocateInfo info;
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    info.commandPool = resource->cmdPool;
+    info.pNext = NULL;
+    info.commandPool = base->renderRes.cmdPool;
     info.commandBufferCount = base->imageCount;
     info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    scene->pipeline.cmdBuffers = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer) * base->imageCount);
+
+    return vkAllocateCommandBuffers(base->devBase.device, &info, scene->pipeline.cmdBuffers);
+}
+
+static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
+{
+    VkResult result = VK_SUCCESS;
+    VkRect2D area;
+    area.offset.x = 0;
+    area.offset.y = 0;
+    area.extent.width = width;
+    area.extent.height = height;
+
+    VkClearRect rect;
+    rect.baseArrayLayer = 0;
+    rect.layerCount = 1;
+    rect.rect = area;
+
+    VkClearValue clearVals[2];
+    memset(clearVals[0].color.float32, 0, sizeof(clearVals[0].color.float32));
+    clearVals[0].color.float32[0] = 1.0;
+    clearVals[0].color.float32[3] = 1.0;
+    clearVals[1].depthStencil.depth = 0.0f;
+    clearVals[1].depthStencil.stencil = 0;
+
+    VkCommandBufferBeginInfo info;
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
     info.pNext = NULL;
+    info.pInheritanceInfo = NULL;
 
-    scene->cmdBuffers = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer) * base->imageCount);
+    for(uint32_t i = 0; i < base->imageCount && result == VK_SUCCESS; i++)
+    {
+        VkRenderPassBeginInfo rpBegInfo;
+        rpBegInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rpBegInfo.pNext = NULL;
+        rpBegInfo.renderPass = base->renderImage[i].renderPass;
+        rpBegInfo.framebuffer = base->renderImage[i].frameBuffer;
+        rpBegInfo.renderArea = area;
+        rpBegInfo.clearValueCount = 2;
+        rpBegInfo.pClearValues = clearVals;
 
-    return vkAllocateCommandBuffers(base->device, &info, scene->cmdBuffers);
-}
-
-VkResult createSampler(EngineBase *base, RenderScene *scene)
-{
-    VkSamplerCreateInfo info;
-    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    info.pNext = NULL;
-    info.flags = 0;
-    info.magFilter = VK_FILTER_LINEAR;
-    info.minFilter = VK_FILTER_LINEAR;
-    info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    info.anisotropyEnable = VK_FALSE;
-    info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    info.compareEnable = VK_FALSE;
-    info.compareOp = VK_COMPARE_OP_ALWAYS;
-    info.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-    info.maxAnisotropy = 0.0f;
-    info.mipLodBias = 0.0f;
-    info.maxLod = VK_LOD_CLAMP_NONE;
-    info.minLod = 1.0f;
-    info.unnormalizedCoordinates = VK_FALSE;
-
-    return vkCreateSampler(base->device, &info, NULL, &scene->sampler);
-}
-
-VkResult createDescriptorSetLayout(EngineBase *base, RenderScene *scene)
-{
-    VkDescriptorSetLayoutBinding binding[2];
-    binding[0].descriptorCount = 1;
-    binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    binding[0].binding = 0;
-    binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    binding[0].pImmutableSamplers = NULL;
-
-    binding[1].descriptorCount = 1;
-    binding[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    binding[1].binding = 1;
-    binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    binding[1].pImmutableSamplers = NULL;
-
-    VkDescriptorSetLayoutCreateInfo info;
-    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    info.pNext = NULL;
-    info.flags = 0;
-    info.bindingCount = 2;
-    info.pBindings = binding;
-
-    return vkCreateDescriptorSetLayout(base->device, &info, NULL, &scene->descriptorSetLayout);
-}
-
-VkResult createPipelineLayout()
-{
-    VkPushConstantRange range;
-    range.size = 64;
-    range.offset = 0;
-    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkPipelineLayoutCreateInfo info;
-    info.pushConstantRangeCount = 1;
-    info.pPushConstantRanges = &range;
-    info.setLayoutCount = 1;
-    info.pSetLayouts = NULL;
-
-}
-
-VkResult createPipeline()
-{
-    VkGraphicsPipelineCreateInfo info;
-
-    info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    info.flags = NULL;
-    //info.layout = layout;
-    return !VK_SUCCESS;
+        result = vkBeginCommandBuffer(scene->pipeline.cmdBuffers[i], &info);
+        vkCmdBeginRenderPass(scene->pipeline.cmdBuffers[i], &rpBegInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdEndRenderPass(scene->pipeline.cmdBuffers[i]);
+        vkEndCommandBuffer(scene->pipeline.cmdBuffers[i]);
+    }
+    return result;
 }
