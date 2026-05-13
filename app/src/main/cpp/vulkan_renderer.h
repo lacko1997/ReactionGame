@@ -62,9 +62,17 @@ typedef struct SceneMemory
     VkSampler *sampler;
     VkImage *textures;
     VkDeviceMemory *textureMemories;
-    uint32_t bufferCount;
+
+    uint32_t uniformBufferCount;
+    VkBuffer *uniformBuffers;
+    VkDeviceMemory *uniformBufferMemories;
+
+    uint32_t vertexBufferCount;
     VkBuffer *vertexBuffers;
     VkDeviceMemory *vertexBufferMemories;
+    uint32_t indexBufferCount;
+    VkBuffer *indexBuffers;
+    VkDeviceMemory *indexBufferMemories;
 }SceneMemory;
 
 typedef struct PipelineElements

@@ -10,5 +10,7 @@
 #include "vulkan_renderer.h"
 
 void makeTexture(EngineBase *base, RenderScene *scene, uint32_t textureCount, TextureInfo *info);
+void makeVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t index, float *vertexData, uint32_t floatCount);
+
 
 #endif //REACTIONGAME_SCENE_ELEMENTS_H

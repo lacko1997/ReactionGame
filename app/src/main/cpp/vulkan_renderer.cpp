@@ -23,12 +23,14 @@ static VkResult createCommandPool(EngineBase *base);
 static VkResult createDescriptorPool(EngineBase *base);
 
 VkDebugUtilsMessengerEXT messenger;
-
+#define DEBUG
 void makeEngineBase(EngineBase *base)
 {
     __android_log_print(ANDROID_LOG_FATAL, "Vulkan", "Assert OK.");
     CHECK_RESULT(createInstance(base));
+#ifdef DEBUG
     createDebugMessenger(base);
+#endif
     CHECK_RESULT(createDevice(base));
     CHECK_RESULT(createCommandPool(base));
 }
@@ -74,7 +76,7 @@ static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t heig
     info.queueFamilyIndexCount = 1;
     info.pQueueFamilyIndices = &base->queueFamilyIndex;
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     info.mipLevels = 1;
     info.format = VK_FORMAT_D32_SFLOAT;
     info.arrayLayers = 1;
@@ -160,9 +162,12 @@ static void createDebugMessenger(EngineBase *base)
 
 static VkResult createInstance(EngineBase *base)
 {
+#ifdef DEBUG
     const char *extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, "VK_EXT_debug_report"};
     const char *layers[] = {"VK_LAYER_KHRONOS_validation"};
-
+#else
+    const char *extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME};
+#endif
     uint32_t layerCount;
     uint32_t extCount;
     VkLayerProperties *layerProps;
@@ -180,10 +185,15 @@ static VkResult createInstance(EngineBase *base)
     info.pNext = NULL;
     info.flags = 0;
     info.pApplicationInfo = &appInfo;
-    info.enabledExtensionCount = 3;
+    info.enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]);
     info.ppEnabledExtensionNames = extensions;
+#ifdef DEBUG
     info.enabledLayerCount = 1;
     info.ppEnabledLayerNames = layers;
+#else
+    info.enabledLayerCount = 0;
+    info.ppEnabledLayerNames = NULL;
+#endif
 
     vkEnumerateInstanceLayerProperties(&layerCount, NULL);
     layerProps = (VkLayerProperties*)malloc(sizeof(VkLayerProperties) * layerCount);
@@ -256,8 +266,13 @@ static VkResult createDevice(EngineBase *base)
     info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     info.flags = 0;
     info.pNext = NULL;
-    info.enabledLayerCount = 0;
+#ifdef DEBUG
+    info.enabledLayerCount = 1;
     info.ppEnabledLayerNames = layers;
+#else
+    info.enabledLayerCount = 0;
+    info.ppEnabledLayerNames = NULL;
+#endif
     info.enabledExtensionCount = 1;
     info.ppEnabledExtensionNames = extensions;
     info.queueCreateInfoCount = 1;
@@ -296,12 +311,15 @@ static VkResult createSurface(EngineBase *base, ANativeWindow *wnd)
 static VkResult createSwapchain(EngineBase *base, uint32_t width, uint32_t height)
 {
     uint32_t i;
-    uint32_t imageCount = 3;
     VkResult result;
+    VkSurfaceCapabilitiesKHR surfaceCaps;
     VkImage *swapchainImages;
+
     VkExtent2D extent;
     extent.width = width;
     extent.height = height;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(base->devBase.gpu, base->devBase.surface, &surfaceCaps);
 
     VkSwapchainCreateInfoKHR info;
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -313,7 +331,7 @@ static VkResult createSwapchain(EngineBase *base, uint32_t width, uint32_t heigh
     info.imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
     info.imageExtent = extent;
     info.clipped = VK_FALSE;
-    info.minImageCount = imageCount;
+    info.minImageCount = surfaceCaps.minImageCount;
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
     info.surface = base->devBase.surface;
@@ -346,10 +364,10 @@ static VkResult createImageViews(EngineBase *base, uint32_t index)
     VkResult result;
     VkImageViewCreateInfo color_info;
     color_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    color_info.image = base->renderImage[index].colorImage;
-    color_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     color_info.flags = 0;
     color_info.pNext = NULL;
+    color_info.image = base->renderImage[index].colorImage;
+    color_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     color_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     color_info.components.r = VK_COMPONENT_SWIZZLE_R;
     color_info.components.g = VK_COMPONENT_SWIZZLE_G;
@@ -409,8 +427,8 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
 {
     VkAttachmentDescription attachments[2];
     attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[0].flags = 0;
     attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -419,7 +437,7 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
     attachments[1].format = VK_FORMAT_D32_SFLOAT;
-    attachments[1].initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].flags = 0;
@@ -435,6 +453,15 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     VkAttachmentReference depthRef;
     depthRef.attachment = 1;
     depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDependency depens;
+    depens.dependencyFlags = 0;
+    depens.srcSubpass = VK_SUBPASS_EXTERNAL;
+    depens.srcAccessMask = 0;
+    depens.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    depens.dstSubpass = 0;
+    depens.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    depens.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubpassDescription subpass;
     subpass.flags = 0;
@@ -452,8 +479,8 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     info.attachmentCount = 2;
     info.pAttachments = attachments;
-    info.dependencyCount = 0;
-    info.pDependencies = NULL;
+    info.dependencyCount = 1;
+    info.pDependencies = &depens;
     info.subpassCount = 1;
     info.pSubpasses = &subpass;
     info.flags = 0;
@@ -519,7 +546,6 @@ void *mainLoop(void* args)
     result = vkCreateSemaphore(base->devBase.device, &semaphoreInfo[1], NULL, &submit);
     __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "Senmaphore Creation: %d", result);
 
-
     VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submitInfo;
@@ -535,16 +561,19 @@ void *mainLoop(void* args)
 
     VkPresentInfoKHR presentInfo;
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = NULL;
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &submit;
     presentInfo.swapchainCount = 1;
     presentInfo.pResults = &result;
     presentInfo.pSwapchains = &base->swapchain;
+
     while(true)
     {
         vkAcquireNextImageKHR(base->devBase.device, base->swapchain, UINT64_MAX, acquire, VK_NULL_HANDLE, &imgIndex);
         submitInfo.pCommandBuffers = &currentScene->pipeline.cmdBuffers[imgIndex];
         vkQueueSubmit(base->queue, 1, &submitInfo,VK_NULL_HANDLE);
+
         presentInfo.pImageIndices = &imgIndex;
         vkQueuePresentKHR(base->queue, &presentInfo);
     }

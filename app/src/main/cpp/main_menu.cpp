@@ -47,7 +47,7 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
 
     VkClearValue clearVals[2];
     memset(clearVals[0].color.float32, 0, sizeof(clearVals[0].color.float32));
-    clearVals[0].color.float32[0] = 1.0;
+    clearVals[0].color.float32[0] = 0.0;
     clearVals[0].color.float32[3] = 1.0;
     clearVals[1].depthStencil.depth = 0.0f;
     clearVals[1].depthStencil.stencil = 0;
@@ -58,6 +58,7 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
     info.pNext = NULL;
     info.pInheritanceInfo = NULL;
 
+    VkDeviceSize offset = 0;
     for(uint32_t i = 0; i < base->imageCount && result == VK_SUCCESS; i++)
     {
         VkRenderPassBeginInfo rpBegInfo;
@@ -71,6 +72,9 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
 
         result = vkBeginCommandBuffer(scene->pipeline.cmdBuffers[i], &info);
         vkCmdBeginRenderPass(scene->pipeline.cmdBuffers[i], &rpBegInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipeline);
+        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 1, &scene->memory.vertexBuffers[0], &offset);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], 3, 1, 0, 0);
         vkCmdEndRenderPass(scene->pipeline.cmdBuffers[i]);
         vkEndCommandBuffer(scene->pipeline.cmdBuffers[i]);
     }

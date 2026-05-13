@@ -9,7 +9,6 @@ apply from: 'download_vvl.gradle'
 android {
     namespace "com.phenyl.productions.games.reactiongame"
     compileSdkVersion 30
-    buildToolsVersion "30.0.0"
 
     defaultConfig {
         applicationId "com.phenyl.productions.games.reactiongame"

@@ -2,6 +2,7 @@ package com.phenyl.productions.games.reactiongame
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.view.SurfaceView
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -67,15 +68,26 @@ class MainActivity : AppCompatActivity() {
         reader.close();
     }
 
+    fun readShader(resourceId:Int, index:Int)
+    {
+        val spv:ByteArray = resources.openRawResource(resourceId).readBytes();
+        addShaderBytes(spv, index );
+    }
+
     fun loadModel(resourceId:Int)
     {
         enumerateElements(resourceId);
         readModelElements(resourceId);
         endModel();
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        initApp();
+        readShader(R.raw.vertex, 0);
+        readShader(R.raw.fragment, 1);
 
         val renderArea:RenderActivity = RenderActivity(this);
         val layoutSurface:ConstraintLayout = findViewById<ConstraintLayout>(R.id.surface)
@@ -93,6 +105,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    external fun initApp();
+    external fun addShaderBytes(bytes:ByteArray, index:Int);
     external fun beginModel(vertexCount:Int, uvCount:Int, normalCount:Int, triangleCount:Int);
     external fun addLine(ln:String);
     external fun endModel();

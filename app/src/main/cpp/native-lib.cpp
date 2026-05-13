@@ -5,7 +5,10 @@
 #include <android/log.h>
 
 #include "vulkan_renderer.h"
+#include "model_processor.h"
 #include "main_menu.h"
+#include "scene_elements.h"
+#include "pipelines.h"
 
 EngineBase base;
 RenderScene mainMenu_scene;
@@ -27,9 +30,10 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_createVulkanSurfac
         JNIEnv *env, jobject thiz, jobject surface)
 {
     ANativeWindow *wnd = ANativeWindow_fromSurface(env, surface);
-    __android_log_print(ANDROID_LOG_FATAL, "ANDROID", "wnd_ptr: %p", wnd);
     makeEngineBase(&base);
     makeSurface(&base, wnd);
+    mainMenu_scene.memory.vertexBuffers = (VkBuffer*)malloc(sizeof(VkBuffer));
+    mainMenu_scene.memory.vertexBufferMemories = (VkDeviceMemory*)malloc(sizeof(VkDeviceMemory));
     createFinished = true;
 }
 
@@ -38,11 +42,21 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_releaseResources(J
 {
 
 }
+
+float data[] =
+        {
+            0.5, 1.0, -0.5,
+            1.0, 0.0, -0.5,
+            0.0, 0.0,-0.5
+        };
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_surfaceChanged(JNIEnv *env,
         jobject thiz, jint width, jint height)
 {
     makeRenderImage(&base, width, height);
+    makeModelPipeline(&base, &mainMenu_scene, width, height);
+    makeVertexBuffer(&base, &mainMenu_scene, 0, data, sizeof(data)/sizeof(float));
     makeMainMenu(&base, &mainMenu_scene, width, height);
     setCurrentScene(&mainMenu_scene);
     changedFinished = true;
@@ -60,17 +74,20 @@ Java_com_phenyl_productions_games_reactiongame_MainActivity_addLine(JNIEnv *env,
     memcpy(currentLine, line, len);
     if(currentLine[0] == 'v' && currentLine[1] == ' ')
     {
-        processPosition
-    }
-    else if(currentLine[0] == 'v' && currentLine[1] == 'n')
-    {
-
+        processPositionLine(currentLine, len);
     }
     else if(currentLine[0] == 'v' && currentLine[1] == 't')
     {
-
+        processTextureLine(currentLine, len);
+    }
+    else if(currentLine[0] == 'v' && currentLine[1] == 'n')
+    {
+        processNormalLine(currentLine, len);
     }
     else if(currentLine[0] == 'f' && currentLine[1] == ' ')
+    {
+        processTriangleLine(currentLine, len);
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -78,4 +95,25 @@ Java_com_phenyl_productions_games_reactiongame_MainActivity_beginModel(JNIEnv *e
         jint vertex_count, jint uv_count, jint normal_count, jint triangle_count)
 {
     beginModel(vertex_count, uv_count, normal_count, triangle_count);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_endModel(JNIEnv *env, jobject thiz)
+{
+
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_addShaderBytes(JNIEnv *env, jobject thiz,
+       jbyteArray bytes, jint index)
+{
+    uint32_t arrayLen = env->GetArrayLength(bytes);
+    signed char *arrayElements = env->GetByteArrayElements(bytes, NULL);
+    putSpvCode(index, (char *)arrayElements, arrayLen);
+    env->ReleaseByteArrayElements(bytes, arrayElements, 0);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_initApp(JNIEnv *env, jobject thiz)
+{
+    initCodesArray();
 }

@@ -13,6 +13,8 @@ add_library(native-lib
 
             SHARED
 
+            pipelines.cpp
+            scene_elements.cpp
             vulkan_renderer.cpp
             main_menu.cpp
             model_processor.cpp
