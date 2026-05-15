@@ -98,6 +98,18 @@ class MainActivity : AppCompatActivity() {
         layoutSurface.addView(renderArea);
     }
 
+    override fun onResume()
+    {
+        super.onResume();
+        appResume();
+    }
+
+    override fun onPause()
+    {
+        super.onPause();
+        appPause();
+    }
+
     companion object {
         // Used to load the 'native-lib' library on application startup.
         init {
@@ -106,8 +118,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     external fun initApp();
+    external fun appResume();
+    external fun appPause();
     external fun addShaderBytes(bytes:ByteArray, index:Int);
     external fun beginModel(vertexCount:Int, uvCount:Int, normalCount:Int, triangleCount:Int);
     external fun addLine(ln:String);
     external fun endModel();
+    external fun releaseResources();
 }

@@ -18,11 +18,15 @@ pthread_t thread;
 bool createFinished = false;
 bool changedFinished = false;
 
+bool paused = false, resumed = false;
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_drawFrame(JNIEnv *env, jobject thiz)
 {
     while(!createFinished && !changedFinished);
     pthread_create(&thread, NULL, mainLoop, &base);
+
+    __android_log_print(ANDROID_LOG_FATAL, "APP", "Surface created, running ...");
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -30,36 +34,44 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_createVulkanSurfac
         JNIEnv *env, jobject thiz, jobject surface)
 {
     ANativeWindow *wnd = ANativeWindow_fromSurface(env, surface);
-    makeEngineBase(&base);
+    if(!resumed)
+    {
+        makeEngineBase(&base);
+    }
     makeSurface(&base, wnd);
-    mainMenu_scene.memory.vertexBuffers = (VkBuffer*)malloc(sizeof(VkBuffer));
-    mainMenu_scene.memory.vertexBufferMemories = (VkDeviceMemory*)malloc(sizeof(VkDeviceMemory));
+    if(!resumed)
+    {
+        mainMenu_scene.memory.vertexBuffers = (VkBuffer *) malloc(sizeof(VkBuffer));
+        mainMenu_scene.memory.vertexBufferMemories = (VkDeviceMemory *) malloc(sizeof(VkDeviceMemory));
+    }
     createFinished = true;
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_com_phenyl_productions_games_reactiongame_RenderActivity_releaseResources(JNIEnv *env, jobject thiz)
-{
-
 }
 
 float data[] =
         {
-            0.5, 1.0, -0.5,
-            1.0, 0.0, -0.5,
-            0.0, 0.0,-0.5
+                0.5, 0.0, 0.0,  0.0, 0.0,  0.0, 0.0, 1.0,
+                0.5, 0.5, 0.0, 0.0, 0.0,  0.0, 0.0, 1.0,
+                0.0, 0.5,0.0, 0.0, 0.0,  0.0, 0.0, 1.0,
+                0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 1.0
         };
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_surfaceChanged(JNIEnv *env,
         jobject thiz, jint width, jint height)
 {
-    makeRenderImage(&base, width, height);
-    makeModelPipeline(&base, &mainMenu_scene, width, height);
-    makeVertexBuffer(&base, &mainMenu_scene, 0, data, sizeof(data)/sizeof(float));
-    makeMainMenu(&base, &mainMenu_scene, width, height);
-    setCurrentScene(&mainMenu_scene);
-    changedFinished = true;
+        makeRenderImage(&base, width, height);
+        makeModelPipeline(&base, &mainMenu_scene, width, height);
+        if(!resumed)
+        {
+            makeVertexBuffer(&base, &mainMenu_scene, 0, data, sizeof(data) / sizeof(float));
+            makeMainMenu(&base, &mainMenu_scene, width, height);
+        }
+        else
+        {
+            resumeMainMenu(&base, &mainMenu_scene, width, height);
+        }
+        setCurrentScene(&mainMenu_scene);
+        changedFinished = true;
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -116,4 +128,36 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_MainActivity_initApp(JNIEnv *env, jobject thiz)
 {
     initCodesArray();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_appResume(JNIEnv *env, jobject thiz)
+{
+    if(paused)
+    {
+        __android_log_print(ANDROID_LOG_FATAL, "APP", "resume");
+        paused = false;
+        resumed = true;
+    }
+}
+
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_appPause(JNIEnv *env, jobject thiz)
+{
+    paused = true;
+    releaseSurfaceImages(&base);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_RenderActivity_destroyedSurface(JNIEnv *env, jobject thiz)
+{
+    __android_log_print(ANDROID_LOG_FATAL, "APP", "Surface destroyed");
+    running = false;
+    pthread_join(thread, NULL);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_releaseResources(JNIEnv *env, jobject thiz)
+{
+
 }

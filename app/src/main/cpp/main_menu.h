@@ -9,5 +9,6 @@
 #include "vulkan_renderer.h"
 
 void makeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height);
+void resumeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height);
 
 #endif //REACTIONGAME_MAIN_MENU_H

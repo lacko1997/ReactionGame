@@ -6,7 +6,9 @@
 #include <android/log.h>
 #include <android/window.h>
 
+bool running = true;
 RenderScene *currentScene;
+static VkFormat swapchainFormat;
 
 static void createDebugMessenger(EngineBase *base);
 
@@ -23,7 +25,7 @@ static VkResult createCommandPool(EngineBase *base);
 static VkResult createDescriptorPool(EngineBase *base);
 
 VkDebugUtilsMessengerEXT messenger;
-#define DEBUG
+//#define DEBUG
 void makeEngineBase(EngineBase *base)
 {
     __android_log_print(ANDROID_LOG_FATAL, "Vulkan", "Assert OK.");
@@ -54,68 +56,20 @@ void makeRenderImage(EngineBase *base, uint32_t width, uint32_t height)
     }
 }
 
-static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t height, uint32_t index)
+void releaseSurfaceImages(EngineBase *base)
 {
-    uint32_t i;
-    uint32_t heapIndex;
-    VkDeviceMemory memory;
-    VkResult result;
-
-    VkExtent3D extent;
-    extent.width = width;
-    extent.height = height;
-    extent.depth = 1;
-
-    VkImageCreateInfo info;
-    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    info.imageType = VK_IMAGE_TYPE_2D;
-    info.flags = 0;
-    info.pNext = NULL;
-    info.samples = VK_SAMPLE_COUNT_1_BIT;
-    info.extent = extent;
-    info.queueFamilyIndexCount = 1;
-    info.pQueueFamilyIndices = &base->queueFamilyIndex;
-    info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    info.mipLevels = 1;
-    info.format = VK_FORMAT_D32_SFLOAT;
-    info.arrayLayers = 1;
-    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    result = vkCreateImage(base->devBase.device, &info, NULL, &base->renderImage[index].depthImage);
-
-    if(result == VK_SUCCESS)
+    for(uint32_t i = 0; i < base->imageCount; i++)
     {
-        VkMemoryRequirements memReqs;
-        vkGetImageMemoryRequirements(base->devBase.device, base->renderImage[index].depthImage, &memReqs);
-
-        VkPhysicalDeviceMemoryProperties props;
-        vkGetPhysicalDeviceMemoryProperties(base->devBase.gpu, &props);
-
-        for (i = 0; i < props.memoryTypeCount; i++)
-        {
-            heapIndex = props.memoryTypes[i].heapIndex;
-            if ((props.memoryHeaps[heapIndex].flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
-            {
-                break;
-            }
-        }
-
-        VkMemoryAllocateInfo memInfo;
-        memInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        memInfo.allocationSize = memReqs.size;
-        memInfo.pNext = NULL;
-        memInfo.memoryTypeIndex = i;
-
-        result = vkAllocateMemory(base->devBase.device, &memInfo, NULL, &memory);
-
-        if(result == VK_SUCCESS)
-        {
-            result = vkBindImageMemory(base->devBase.device, base->renderImage[index].depthImage, memory, 0);
-        }
+        vkDestroyFramebuffer(base->devBase.device, base->renderImage[i].frameBuffer, NULL);
+        vkDestroyRenderPass(base->devBase.device, base->renderImage[i].renderPass, NULL);
+        vkDestroyImageView(base->devBase.device, base->renderImage[i].depthView, NULL);
+        vkDestroyImageView(base->devBase.device, base->renderImage[i].depthView, NULL);
+        vkFreeMemory(base->devBase.device, base->renderImage[i].depthMemory, NULL);
+        vkDestroyImage(base->devBase.device, base->renderImage[i].depthImage, NULL);
+        vkDestroyImageView(base->devBase.device, base->renderImage[i].colorView, NULL);
     }
-    return result;
+    vkDestroySwapchainKHR(base->devBase.device, base->swapchain, NULL);
+    vkDestroySurfaceKHR(base->devBase.instance, base->devBase.surface, NULL);
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -226,7 +180,7 @@ static VkResult createDevice(EngineBase *base)
     VkDeviceCreateInfo info;
     uint32_t queueFamilyCount;
     VkPhysicalDeviceFeatures features;
-    VkQueueFamilyProperties *queue_props;
+    VkQueueFamilyProperties *queueProps;
     uint32_t layerCount;
     VkLayerProperties *props;
 
@@ -242,12 +196,12 @@ static VkResult createDevice(EngineBase *base)
     base->devBase.gpu = devices[0];
 
     vkGetPhysicalDeviceQueueFamilyProperties(devices[0], &queueFamilyCount, NULL);
-    queue_props = (VkQueueFamilyProperties*)malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(devices[0], &queueFamilyCount, queue_props);
+    queueProps = (VkQueueFamilyProperties*)malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(devices[0], &queueFamilyCount, queueProps);
 
-    for(i = 0; i < gpuCount; i++)
+    for(i = 0; i < queueFamilyCount; i++)
     {
-        if((queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+        if((queueProps[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT)) != 0)
         {
             base->queueFamilyIndex = i;
             break;
@@ -294,6 +248,7 @@ static VkResult createDevice(EngineBase *base)
         }
         free(props);
     }
+    free(queueProps);
     return result;
 }
 
@@ -311,24 +266,31 @@ static VkResult createSurface(EngineBase *base, ANativeWindow *wnd)
 static VkResult createSwapchain(EngineBase *base, uint32_t width, uint32_t height)
 {
     uint32_t i;
+    uint32_t formatCount;
     VkResult result;
     VkSurfaceCapabilitiesKHR surfaceCaps;
     VkImage *swapchainImages;
+    VkSurfaceFormatKHR *formats;
 
     VkExtent2D extent;
     extent.width = width;
     extent.height = height;
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(base->devBase.gpu, base->devBase.surface, &surfaceCaps);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(base->devBase.gpu, base->devBase.surface, &formatCount, NULL);
+    formats = (VkSurfaceFormatKHR*)malloc(sizeof(VkSurfaceFormatKHR)*formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(base->devBase.gpu, base->devBase.surface, &formatCount, formats);
+
+    swapchainFormat = formats[0].format;
 
     VkSwapchainCreateInfoKHR info;
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     info.flags = 0;
     info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    info.imageColorSpace = formats[0].colorSpace;
     info.imageArrayLayers = 1;
-    info.imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    info.imageFormat = formats[0].format;
     info.imageExtent = extent;
     info.clipped = VK_FALSE;
     info.minImageCount = surfaceCaps.minImageCount;
@@ -354,53 +316,125 @@ static VkResult createSwapchain(EngineBase *base, uint32_t width, uint32_t heigh
             base->renderImage[i].colorImage = swapchainImages[i];
         }
         free(swapchainImages);
+        free(formats);
     }
 
+    return result;
+}
+
+static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t height, uint32_t index)
+{
+    uint32_t i;
+    uint32_t heapIndex;
+    VkDeviceMemory memory;
+    VkResult result;
+
+    VkExtent3D extent;
+    extent.width = width;
+    extent.height = height;
+    extent.depth = 1;
+
+    VkImageCreateInfo info;
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.flags = 0;
+    info.pNext = NULL;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.extent = extent;
+    info.queueFamilyIndexCount = 1;
+    info.pQueueFamilyIndices = &base->queueFamilyIndex;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    info.mipLevels = 1;
+    info.format = VK_FORMAT_D32_SFLOAT;
+    info.arrayLayers = 1;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    result = vkCreateImage(base->devBase.device, &info, NULL, &base->renderImage[index].depthImage);
+
+    if(result == VK_SUCCESS)
+    {
+        VkMemoryRequirements memReqs;
+        vkGetImageMemoryRequirements(base->devBase.device, base->renderImage[index].depthImage, &memReqs);
+
+        VkPhysicalDeviceMemoryProperties props;
+        vkGetPhysicalDeviceMemoryProperties(base->devBase.gpu, &props);
+
+        for (i = 0; i < props.memoryTypeCount; i++)
+        {
+            heapIndex = props.memoryTypes[i].heapIndex;
+            if ((props.memoryHeaps[heapIndex].flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0)
+            {
+                break;
+            }
+        }
+
+        VkMemoryAllocateInfo memInfo;
+        memInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        memInfo.allocationSize = memReqs.size;
+        memInfo.pNext = NULL;
+        memInfo.memoryTypeIndex = i;
+
+        result = vkAllocateMemory(base->devBase.device, &memInfo, NULL, &memory);
+
+        if(result == VK_SUCCESS)
+        {
+            base->renderImage[index].depthMemory = memory;
+            result = vkBindImageMemory(base->devBase.device, base->renderImage[index].depthImage, memory, 0);
+        }
+    }
     return result;
 }
 
 static VkResult createImageViews(EngineBase *base, uint32_t index)
 {
     VkResult result;
-    VkImageViewCreateInfo color_info;
-    color_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    color_info.flags = 0;
-    color_info.pNext = NULL;
-    color_info.image = base->renderImage[index].colorImage;
-    color_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    color_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-    color_info.components.r = VK_COMPONENT_SWIZZLE_R;
-    color_info.components.g = VK_COMPONENT_SWIZZLE_G;
-    color_info.components.b = VK_COMPONENT_SWIZZLE_B;
-    color_info.components.a = VK_COMPONENT_SWIZZLE_A;
-    color_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    color_info.subresourceRange.baseArrayLayer = 0;
-    color_info.subresourceRange.baseMipLevel = 0;
-    color_info.subresourceRange.levelCount = 1;
-    color_info.subresourceRange.layerCount = 1;
 
-    result = vkCreateImageView(base->devBase.device, &color_info, NULL, &base->renderImage[index].colorView);
+    VkComponentMapping component;
+    component.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    VkImageSubresourceRange subresourceRange;
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.layerCount = 1;
+
+    VkImageViewCreateInfo colorInfo;
+    colorInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    colorInfo.pNext = NULL;
+    colorInfo.flags = 0;
+    colorInfo.image = base->renderImage[index].colorImage;
+    colorInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    colorInfo.format = swapchainFormat;
+    colorInfo.components = component;
+    colorInfo.subresourceRange = subresourceRange;
+
+    result = vkCreateImageView(base->devBase.device, &colorInfo, NULL, &base->renderImage[index].colorView);
 
     if(result == VK_SUCCESS)
     {
-        VkImageViewCreateInfo depth_info;
-        depth_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        depth_info.image = base->renderImage[index].depthImage;
-        depth_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        depth_info.flags = 0;
-        depth_info.pNext = NULL;
-        depth_info.format = VK_FORMAT_D32_SFLOAT;
-        depth_info.components.r = VK_COMPONENT_SWIZZLE_R;
-        depth_info.components.g = VK_COMPONENT_SWIZZLE_G;
-        depth_info.components.b = VK_COMPONENT_SWIZZLE_B;
-        depth_info.components.a = VK_COMPONENT_SWIZZLE_A;
-        depth_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        depth_info.subresourceRange.baseArrayLayer = 0;
-        depth_info.subresourceRange.baseMipLevel = 0;
-        depth_info.subresourceRange.levelCount = 1;
-        depth_info.subresourceRange.layerCount = 1;
+        subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        subresourceRange.baseArrayLayer = 0;
+        subresourceRange.baseMipLevel = 0;
+        subresourceRange.levelCount = 1;
+        subresourceRange.layerCount = 1;
 
-        result = vkCreateImageView(base->devBase.device, &depth_info, NULL, &base->renderImage[index].depthView);
+        VkImageViewCreateInfo depthInfo;
+        depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        depthInfo.pNext = NULL;
+        depthInfo.flags = 0;
+        depthInfo.image = base->renderImage[index].depthImage;
+        depthInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        depthInfo.format = VK_FORMAT_D32_SFLOAT;
+        depthInfo.components = component;
+        depthInfo.subresourceRange = subresourceRange;
+
+        result = vkCreateImageView(base->devBase.device, &depthInfo, NULL, &base->renderImage[index].depthView);
     }
     return result;
 }
@@ -411,14 +445,14 @@ static VkResult createFramebuffer(EngineBase *base, uint32_t width, uint32_t hei
 
     VkFramebufferCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    info.pNext = NULL;
+    info.flags = 0;
     info.renderPass = base->renderImage[index].renderPass;
+    info.attachmentCount = 2;
+    info.pAttachments = attachments;
     info.width = width;
     info.height = height;
     info.layers = 1;
-    info.attachmentCount = 2;
-    info.pAttachments = attachments;
-    info.flags = 0;
-    info.pNext = NULL;
 
     return vkCreateFramebuffer(base->devBase.device, &info, NULL, &base->renderImage[index].frameBuffer);
 }
@@ -426,25 +460,25 @@ static VkResult createFramebuffer(EngineBase *base, uint32_t width, uint32_t hei
 static VkResult createRenderpass(EngineBase *base, uint32_t index)
 {
     VkAttachmentDescription attachments[2];
-    attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[0].flags = 0;
+    attachments[0].format = swapchainFormat;
+    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    attachments[1].format = VK_FORMAT_D32_SFLOAT;
-    attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].flags = 0;
+    attachments[1].format = VK_FORMAT_D32_SFLOAT;
+    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[1].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentReference colorRef;
     colorRef.attachment = 0;
@@ -465,26 +499,26 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
 
     VkSubpassDescription subpass;
     subpass.flags = 0;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colorRef;
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.inputAttachmentCount = 0;
     subpass.pInputAttachments = NULL;
-    subpass.preserveAttachmentCount = 0;
-    subpass.pPreserveAttachments = NULL;
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorRef;
     subpass.pResolveAttachments = NULL;
     subpass.pDepthStencilAttachment = &depthRef;
+    subpass.preserveAttachmentCount = 0;
+    subpass.pPreserveAttachments = NULL;
 
     VkRenderPassCreateInfo info;
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    info.pNext = NULL;
+    info.flags = 0;
     info.attachmentCount = 2;
     info.pAttachments = attachments;
-    info.dependencyCount = 1;
-    info.pDependencies = &depens;
     info.subpassCount = 1;
     info.pSubpasses = &subpass;
-    info.flags = 0;
-    info.pNext = NULL;
+    info.dependencyCount = 1;
+    info.pDependencies = &depens;
 
     return vkCreateRenderPass(base->devBase.device, &info, NULL, &base->renderImage[index].renderPass);
 }
@@ -568,7 +602,7 @@ void *mainLoop(void* args)
     presentInfo.pResults = &result;
     presentInfo.pSwapchains = &base->swapchain;
 
-    while(true)
+    while(running)
     {
         vkAcquireNextImageKHR(base->devBase.device, base->swapchain, UINT64_MAX, acquire, VK_NULL_HANDLE, &imgIndex);
         submitInfo.pCommandBuffers = &currentScene->pipeline.cmdBuffers[imgIndex];

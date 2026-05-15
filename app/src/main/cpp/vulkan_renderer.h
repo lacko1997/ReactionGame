@@ -21,6 +21,7 @@ typedef struct RenderBase
 {
     VkImage colorImage;
     VkImage depthImage;
+    VkDeviceMemory depthMemory;
     VkImageView colorView;
     VkImageView depthView;
     VkFramebuffer frameBuffer;
@@ -44,18 +45,6 @@ typedef struct EngineBase
     RenderRes renderRes;
 }EngineBase;
 
-typedef struct Code
-{
-    uint32_t codeSize;
-    uint32_t *code;
-}Code;
-
-typedef struct ShaderCodes
-{
-    Code vertexShader;
-    Code fragmentShader;
-}ShaderCodes;
-
 typedef struct SceneMemory
 {
     uint32_t textureCount;
@@ -77,12 +66,12 @@ typedef struct SceneMemory
 
 typedef struct PipelineElements
 {
-    VkPipeline pipeline;
-    VkDescriptorSet descriptors;
-    VkCommandBuffer *cmdBuffers;
     VkPipelineLayout pipelineLayout;
+    VkDescriptorSet descriptors;
     VkDescriptorSetLayout descriptorSetLayout;
     VkShaderModule modules[2];
+    VkPipeline *pipeline;
+    VkCommandBuffer *cmdBuffers;
 }PipelineElements;
 
 typedef struct RenderScene
@@ -107,10 +96,15 @@ typedef struct TextureInfo
         }                           \
     } while(0)
 
+extern bool running;
+
 void makeEngineBase(EngineBase *base);
 void makeSurface(EngineBase *base, struct ANativeWindow *wnd);
 void makeRenderImage(EngineBase *base, uint32_t width, uint32_t height);
 void setCurrentScene(RenderScene *scene);
 void *mainLoop(void* args);
+
+void releaseSurfaceImages(EngineBase *base);
+
 
 #endif //REACTIONGAME_VULKAN_RENDERER_H

@@ -8,27 +8,21 @@
 #include <android/log.h>
 #include "scene_elements.h"
 
-static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene);
 static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height);
 
 void makeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
 {
-    CHECK_RESULT(createCommandBuffers(base, scene));
+    makeCommandBuffers(base, scene);
     CHECK_RESULT(recordCommandBuffer(base, scene, width, height));
 }
 
-static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene)
+void resumeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
 {
-    VkCommandBufferAllocateInfo info;
-    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    info.pNext = NULL;
-    info.commandPool = base->renderRes.cmdPool;
-    info.commandBufferCount = base->imageCount;
-    info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-    scene->pipeline.cmdBuffers = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer) * base->imageCount);
-
-    return vkAllocateCommandBuffers(base->devBase.device, &info, scene->pipeline.cmdBuffers);
+    for(uint32_t i = 0; i < base->imageCount; i++)
+    {
+        vkResetCommandBuffer(scene->pipeline.cmdBuffers[i], 0);
+    }
+    CHECK_RESULT(recordCommandBuffer(base, scene, width, height));
 }
 
 static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
@@ -47,7 +41,7 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
 
     VkClearValue clearVals[2];
     memset(clearVals[0].color.float32, 0, sizeof(clearVals[0].color.float32));
-    clearVals[0].color.float32[0] = 0.0;
+    clearVals[0].color.float32[2] = 1.0;
     clearVals[0].color.float32[3] = 1.0;
     clearVals[1].depthStencil.depth = 0.0f;
     clearVals[1].depthStencil.stencil = 0;
@@ -72,9 +66,9 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
 
         result = vkBeginCommandBuffer(scene->pipeline.cmdBuffers[i], &info);
         vkCmdBeginRenderPass(scene->pipeline.cmdBuffers[i], &rpBegInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipeline);
+        vkCmdBindPipeline(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipeline[i]);
         vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 1, &scene->memory.vertexBuffers[0], &offset);
-        vkCmdDraw(scene->pipeline.cmdBuffers[i], 3, 1, 0, 0);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], 4, 1, 0, 0);
         vkCmdEndRenderPass(scene->pipeline.cmdBuffers[i]);
         vkEndCommandBuffer(scene->pipeline.cmdBuffers[i]);
     }

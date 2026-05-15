@@ -14,4 +14,6 @@ void processTextureLine(char *line, uint32_t len);
 void processNormalLine(char *line, uint32_t len);
 void processTriangleLine(char *line, uint32_t len);
 
+void endModel();
+
 #endif //REACTIONGAME_MODEL_PROCESSOR_H

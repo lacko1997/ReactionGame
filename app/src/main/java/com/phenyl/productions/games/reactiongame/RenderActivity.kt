@@ -12,19 +12,20 @@ import android.view.SurfaceView
 
 class RenderActivity(context: Context?) : SurfaceView(context), SurfaceHolder.Callback
 {
-    override fun surfaceCreated(p0: SurfaceHolder) {
+    override fun surfaceCreated(p0: SurfaceHolder)
+    {
         createVulkanSurface(this.holder.surface);
     }
 
     override fun surfaceChanged(p0: SurfaceHolder, format: Int, width: Int, height: Int)
     {
-        surfaceChanged(width, height)
-        drawFrame()
+        surfaceChanged(width, height);
+        drawFrame();
     }
 
     override fun surfaceDestroyed(p0: SurfaceHolder)
     {
-
+        destroyedSurface();
     }
 
     override fun onDraw(canvas: Canvas?)
@@ -32,8 +33,8 @@ class RenderActivity(context: Context?) : SurfaceView(context), SurfaceHolder.Ca
         super.onDraw(canvas);
     }
 
+    external fun destroyedSurface();
     external fun drawFrame();
     external fun surfaceChanged(width:Int, height:Int);
     external fun createVulkanSurface(surface:Surface);
-    external fun releaseResources()
 }

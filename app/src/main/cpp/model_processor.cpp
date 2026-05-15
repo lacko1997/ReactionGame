@@ -7,6 +7,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "scene_elements.h"
+
 typedef struct RawModelIndices
 {
     uint16_t *posIndex;
@@ -42,8 +44,9 @@ typedef struct RawModelList
     RawModelList *next;
 }RawModelList;
 
-RawModelList start;
-RawModelList *end = &start;
+static uint32_t modelCount = 0;
+static RawModelList start;
+static RawModelList *end = &start;
 
 void beginModel(uint16_t vertexCount, uint16_t uvCount, uint16_t normalCount, uint16_t triangleCount)
 {
@@ -160,3 +163,16 @@ void processTriangleLine(char *line, uint32_t len)
     end->model.elment.atTriangle++;
 }
 
+void endModel()
+{
+    end->next = (RawModelList*)malloc(sizeof(RawModelList));
+    end = end->next;
+    end->next = NULL;
+
+    modelCount++;
+}
+
+void makeVulkanBuffers()
+{
+
+}
