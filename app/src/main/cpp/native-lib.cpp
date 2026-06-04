@@ -41,19 +41,12 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_createVulkanSurfac
     makeSurface(&base, wnd);
     if(!resumed)
     {
-        mainMenu_scene.memory.vertexBuffers = (VkBuffer *) malloc(sizeof(VkBuffer));
-        mainMenu_scene.memory.vertexBufferMemories = (VkDeviceMemory *) malloc(sizeof(VkDeviceMemory));
+        mainMenu_scene.memory.modelBuffers = (Model*) malloc(sizeof(Model));
+        mainMenu_scene.memory.uniformBuffers = (VkBuffer*)malloc(sizeof(VkBuffer) * 2);
+        mainMenu_scene.memory.uniformBufferMemories = (VkDeviceMemory*)malloc(sizeof(VkDeviceMemory) * 2);
     }
     createFinished = true;
 }
-
-float data[] =
-        {
-                0.5, 0.0, 0.0,  0.0, 0.0,  0.0, 0.0, 1.0,
-                0.5, 0.5, 0.0, 0.0, 0.0,  0.0, 0.0, 1.0,
-                0.0, 0.5,0.0, 0.0, 0.0,  0.0, 0.0, 1.0,
-                0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0, 1.0
-        };
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_surfaceChanged(JNIEnv *env,
@@ -61,9 +54,14 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_surfaceChanged(JNI
 {
         makeRenderImage(&base, width, height);
         makeModelPipeline(&base, &mainMenu_scene, width, height);
+        makeDescriptorPool(&base);
+        makeDescriptorSets(&base, &mainMenu_scene);
+
         if(!resumed)
         {
-            makeVertexBuffer(&base, &mainMenu_scene, 0, data, sizeof(data) / sizeof(float));
+            makeVulkanBuffers(&base, &mainMenu_scene);
+            makeUniformBuffer(&base, &mainMenu_scene, 16, 0);
+            makeUniformBuffer(&base, &mainMenu_scene, 3, 1);
             makeMainMenu(&base, &mainMenu_scene, width, height);
         }
         else
@@ -106,13 +104,13 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_MainActivity_beginModel(JNIEnv *env, jobject thiz,
         jint vertex_count, jint uv_count, jint normal_count, jint triangle_count)
 {
-    beginModel(vertex_count, uv_count, normal_count, triangle_count);
+    beginModel(vertex_count, uv_count, normal_count, triangle_count * 3);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_MainActivity_endModel(JNIEnv *env, jobject thiz)
 {
-
+    endModel();
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -145,19 +143,29 @@ Java_com_phenyl_productions_games_reactiongame_MainActivity_appResume(JNIEnv *en
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_MainActivity_appPause(JNIEnv *env, jobject thiz)
 {
+    __android_log_print(ANDROID_LOG_FATAL, "APP", "Pause");
+
     paused = true;
+    running = false;
+    pthread_join(thread, NULL);
+
+    releasePipeline(&base, &mainMenu_scene);
     releaseSurfaceImages(&base);
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_destroyedSurface(JNIEnv *env, jobject thiz)
 {
     __android_log_print(ANDROID_LOG_FATAL, "APP", "Surface destroyed");
-    running = false;
-    pthread_join(thread, NULL);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_MainActivity_releaseResources(JNIEnv *env, jobject thiz)
 {
 
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_phenyl_productions_games_reactiongame_MainActivity_appStop(JNIEnv *env, jobject thiz)
+{
+    __android_log_print(ANDROID_LOG_FATAL, "APP", "Stop");
 }

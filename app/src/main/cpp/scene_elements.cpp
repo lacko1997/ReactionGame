@@ -6,20 +6,14 @@
 #include <string.h>
 #include <android/log.h>
 
-static float pushConstant[16] =
-        {
-                1.0f,  0.0f, 0.0f, 0.0f,
-                0.0f, -1.0f, 0.0f, 0.0f,
-                0.0f,  0.0f, 0.5f, 0.0f,
-                0.0f,  0.0f, 0.0f, 1.0f
-        };
-
 static VkResult createTextureImage(EngineBase *base, SceneMemory *memory, uint32_t width, uint32_t height, uint32_t index);
 static VkResult createSampler(EngineBase *base, RenderScene *scene, uint32_t samplerIndex);
 static VkResult createBuffer(EngineBase *base, RenderScene*, uint32_t size, uint32_t index, VkBufferUsageFlags usage);
 static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 static VkResult createIndexBuffer(EngineBase *base, RenderScene *scene, uint32_t indexCount, uint32_t index);
+static VkResult createUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene);
+static VkResult createDescriptorSets(EngineBase *base, RenderScene *scene);
 
 void makeTexture(EngineBase *base, RenderScene *scene, uint32_t textureCount, TextureInfo *info)
 {
@@ -38,14 +32,24 @@ void makeVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t index, floa
 {
     void *data;
     CHECK_RESULT(createVertexBuffer(base, scene, floatCount, index));
-    vkMapMemory(base->devBase.device, scene->memory.vertexBufferMemories[index], 0, sizeof(float) * floatCount, 0, &data);
+    vkMapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory, 0, sizeof(float) * floatCount, 0, &data);
     memcpy(data, vertexData, sizeof(float) * floatCount);
-    vkUnmapMemory(base->devBase.device, scene->memory.vertexBufferMemories[index]);
+    vkUnmapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory);
 };
+
+void makeUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index)
+{
+    CHECK_RESULT(createUniformBuffer(base, scene, floatCount, index));
+}
 
 void makeCommandBuffers(EngineBase *base, RenderScene *scene)
 {
     CHECK_RESULT(createCommandBuffers(base, scene));
+}
+
+void makeDescriptorSets(EngineBase *base, RenderScene *scene)
+{
+    CHECK_RESULT(createDescriptorSets(base, scene));
 }
 
 static VkResult createTextureImage(EngineBase *base, SceneMemory *memory, uint32_t width, uint32_t height, uint32_t index)
@@ -142,13 +146,13 @@ static VkResult createBuffer(EngineBase *base, RenderScene *scene, uint32_t size
 
     if(usage == VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
     {
-        outputBuffer = &scene->memory.indexBuffers[index];
-        outputMemory = &scene->memory.indexBufferMemories[index];
+        outputBuffer = &scene->memory.modelBuffers[index].indexBuffer;
+        outputMemory = &scene->memory.modelBuffers[index].indexBufferMemory;
     }
     else if(usage == VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
     {
-        outputBuffer = &scene->memory.vertexBuffers[index];
-        outputMemory = &scene->memory.vertexBufferMemories[index];
+        outputBuffer = &scene->memory.modelBuffers[index].vertexBuffer;
+        outputMemory = &scene->memory.modelBuffers[index].vertexBufferMemory;
     }
     else if(usage == VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
     {
@@ -176,7 +180,7 @@ static VkResult createBuffer(EngineBase *base, RenderScene *scene, uint32_t size
 
         vkGetPhysicalDeviceMemoryProperties(base->devBase.gpu, &memProps);
 
-        vkGetBufferMemoryRequirements(base->devBase.device, scene->memory.vertexBuffers[index], &reqs);
+        vkGetBufferMemoryRequirements(base->devBase.device, *outputBuffer, &reqs);
 
         for(uint32_t  i = 0; i < memProps.memoryTypeCount; i++)
         {
@@ -208,9 +212,26 @@ static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_
     return createBuffer(base, scene, floatCount * sizeof(float), index, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 }
 
+static VkResult createUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index)
+{
+    return createBuffer(base, scene, floatCount * sizeof(float), index, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+}
+
 static VkResult createIndexBuffer(EngineBase *base, RenderScene *scene, uint32_t indexCount, uint32_t index)
 {
     return createBuffer(base, scene, index * sizeof(uint16_t), index, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+}
+
+static VkResult createDescriptorSets(EngineBase *base, RenderScene *scene)
+{
+    VkDescriptorSetAllocateInfo info;
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    info.pNext = NULL;
+    info.descriptorSetCount = 1;
+    info.pSetLayouts = &scene->pipeline.descriptorSetLayout;
+    info.descriptorPool = base->renderRes.descrPool;
+
+    return vkAllocateDescriptorSets(base->devBase.device, &info, scene->pipeline.descriptors);
 }
 
 static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene)

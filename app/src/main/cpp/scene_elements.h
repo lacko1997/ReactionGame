@@ -11,7 +11,9 @@
 
 void makeTexture(EngineBase *base, RenderScene *scene, uint32_t textureCount, TextureInfo *info);
 void makeVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t index, float *vertexData, uint32_t floatCount);
+void makeUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 void makeCommandBuffers(EngineBase *base, RenderScene *scene);
+void makeDescriptorSets(EngineBase *base, RenderScene *scene);
 
 
 #endif //REACTIONGAME_SCENE_ELEMENTS_H

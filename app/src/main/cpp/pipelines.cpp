@@ -25,7 +25,7 @@ static VkPipelineShaderStageCreateInfo shaderStages[2];
 static VkPipelineDepthStencilStateCreateInfo depthInfo;
 
 static VkResult createShaderModule(EngineBase *base, RenderScene *scene, uint32_t index);
-static VkResult createDescriptorSetLayout(EngineBase *base, RenderScene *scene);
+static VkResult createModelDescriptorSetLayout(EngineBase *base, RenderScene *scene);
 static VkResult createPipeline(EngineBase *base, RenderScene *scene, uint32_t index, uint32_t width, uint32_t height);
 
 static VkResult createTextPipelineLayout(EngineBase *base, RenderScene *scene);
@@ -55,7 +55,7 @@ void putSpvCode(uint32_t index, char* byteArray, uint32_t byteCount)
 
 void makeModelPipeline(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
 {
-    createDescriptorSetLayout(base, scene);
+    createModelDescriptorSetLayout(base, scene);
     createModelPipelineLayout(base, scene);
     fillModelPipelineInputAttribs();
     CHECK_RESULT(createShaderModule(base, scene, MODEL_SHADER_MODULE_INDEX * 2 + 0));
@@ -69,18 +69,25 @@ void makeModelPipeline(EngineBase *base, RenderScene *scene, uint32_t width, uin
     }
 }
 
+void releasePipeline(EngineBase *base, RenderScene *scene)
+{
+    for(uint32_t i = 0; i < base->imageCount; i++)
+    {
+        vkDestroyPipeline(base->devBase.device, scene->pipeline.pipeline[i], NULL);
+    }
+}
 
-static VkResult createDescriptorSetLayout(EngineBase *base, RenderScene *scene)
+static VkResult createModelDescriptorSetLayout(EngineBase *base, RenderScene *scene)
 {
     VkDescriptorSetLayoutBinding binding[2];
     binding[0].descriptorCount = 1;
     binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     binding[0].binding = 0;
-    binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    binding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     binding[0].pImmutableSamplers = NULL;
 
     binding[1].descriptorCount = 1;
-    binding[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+    binding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     binding[1].binding = 1;
     binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     binding[1].pImmutableSamplers = NULL;
@@ -89,12 +96,11 @@ static VkResult createDescriptorSetLayout(EngineBase *base, RenderScene *scene)
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = NULL;
     info.flags = 0;
-    info.bindingCount = 0;
+    info.bindingCount = 2;
     info.pBindings = binding;
 
     return vkCreateDescriptorSetLayout(base->devBase.device, &info, NULL, &scene->pipeline.descriptorSetLayout);
 }
-
 
 static void fillTextPipelineInputAttribs()
 {
@@ -212,8 +218,8 @@ static void fillModelPipelineDepthStencilStage()
 {
     VkStencilOpState back;
     back.compareMask = 0;
-    back.compareOp = VK_COMPARE_OP_ALWAYS;
-    back.depthFailOp = VK_STENCIL_OP_REPLACE;
+    back.compareOp = VK_COMPARE_OP_LESS;
+    back.depthFailOp = VK_STENCIL_OP_KEEP;
     back.failOp = VK_STENCIL_OP_KEEP;
     back.passOp = VK_STENCIL_OP_KEEP;
     back.writeMask = 0;
@@ -221,8 +227,8 @@ static void fillModelPipelineDepthStencilStage()
 
     VkStencilOpState front;
     front.compareMask = 0;
-    front.compareOp = VK_COMPARE_OP_ALWAYS;
-    front.depthFailOp = VK_STENCIL_OP_REPLACE;
+    front.compareOp = VK_COMPARE_OP_LESS;
+    front.depthFailOp = VK_STENCIL_OP_KEEP;
     front.failOp = VK_STENCIL_OP_KEEP;
     front.passOp = VK_STENCIL_OP_KEEP;
     front.writeMask = 0;
@@ -232,9 +238,9 @@ static void fillModelPipelineDepthStencilStage()
     depthInfo.flags = 0;
     depthInfo.pNext = NULL;
     depthInfo.depthBoundsTestEnable = VK_FALSE;
-    depthInfo.depthTestEnable = VK_FALSE;
-    depthInfo.depthWriteEnable = VK_FALSE;
-    depthInfo.minDepthBounds = -1.0f;
+    depthInfo.depthTestEnable = VK_TRUE;
+    depthInfo.depthWriteEnable = VK_TRUE;
+    depthInfo.minDepthBounds = 0.0f;
     depthInfo.maxDepthBounds = 1.0f;
     depthInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     depthInfo.stencilTestEnable = VK_FALSE;
@@ -253,10 +259,10 @@ static VkResult createModelPipelineLayout(EngineBase *base, RenderScene *scene)
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     info.flags = 0;
     info.pNext = NULL;
-    info.pushConstantRangeCount = 0;
-    info.pPushConstantRanges = NULL;//&range;
-    info.setLayoutCount = 0;
-    info.pSetLayouts = NULL;//&scene->pipeline.descriptorSetLayout;
+    info.pushConstantRangeCount = 1;
+    info.pPushConstantRanges = &range;
+    info.setLayoutCount = 1;
+    info.pSetLayouts = &scene->pipeline.descriptorSetLayout;
 
     return vkCreatePipelineLayout(base->devBase.device, &info, NULL, &scene->pipeline.pipelineLayout);
 }
@@ -294,7 +300,7 @@ static VkResult createPipeline(EngineBase *base, RenderScene *scene, uint32_t in
     inputAsm.flags = 0;
     inputAsm.pNext = NULL;
     inputAsm.primitiveRestartEnable = VK_FALSE;
-    inputAsm.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    inputAsm.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
     VkPipelineTessellationStateCreateInfo tescInfo;
     tescInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -316,13 +322,13 @@ static VkResult createPipeline(EngineBase *base, RenderScene *scene, uint32_t in
     rasterizer.flags = 0;
     rasterizer.pNext = nullptr;
     rasterizer.cullMode = VK_CULL_MODE_NONE;
-    rasterizer.depthBiasEnable = VK_FALSE;
+    rasterizer.depthBiasEnable = VK_TRUE;
     rasterizer.depthBiasSlopeFactor = 0.0;
     rasterizer.depthBiasConstantFactor = 0.01;
     rasterizer.lineWidth = 1.0f;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.depthClampEnable = VK_TRUE;
-    rasterizer.depthBiasClamp = 0.1f;
+    rasterizer.depthBiasClamp = 0.01f;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
@@ -340,11 +346,11 @@ static VkResult createPipeline(EngineBase *base, RenderScene *scene, uint32_t in
 
     VkPipelineColorBlendAttachmentState attachment;
     attachment.blendEnable = VK_FALSE;
-    attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
-    attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
+    attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     attachment.colorBlendOp = VK_BLEND_OP_ADD;
-    attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     attachment.alphaBlendOp = VK_BLEND_OP_ADD;
     attachment.colorWriteMask = 0xF;
 
@@ -360,7 +366,6 @@ static VkResult createPipeline(EngineBase *base, RenderScene *scene, uint32_t in
     colorBlend.blendConstants[1] = 0.0f;
     colorBlend.blendConstants[2] = 0.0f;
     colorBlend.blendConstants[3] = 0.0f;
-
 
     colorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlend.flags = 0;

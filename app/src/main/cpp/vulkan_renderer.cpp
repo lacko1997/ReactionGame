@@ -5,6 +5,8 @@
 
 #include <android/log.h>
 #include <android/window.h>
+#include <string.h>
+#include <math.h>
 
 bool running = true;
 RenderScene *currentScene;
@@ -18,11 +20,20 @@ static VkResult createSurface(EngineBase *base, struct ANativeWindow *wnd);
 static VkResult createSwapchain(EngineBase *base, uint32_t width, uint32_t height);
 
 static VkResult createImageViews(EngineBase *base, uint32_t index);
-static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t height, uint32_t index);
+static VkResult createDepthView(EngineBase *base);
+static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t height);
 static VkResult createFramebuffer(EngineBase *base, uint32_t width, uint32_t height, uint32_t index);
 static VkResult createRenderpass(EngineBase *base, uint32_t index);
 static VkResult createCommandPool(EngineBase *base);
 static VkResult createDescriptorPool(EngineBase *base);
+
+static float viewMat[16] =
+    {
+        10.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 50.0, 1.0
+    };
 
 VkDebugUtilsMessengerEXT messenger;
 //#define DEBUG
@@ -47,25 +58,30 @@ void makeRenderImage(EngineBase *base, uint32_t width, uint32_t height)
     uint32_t i;
     __android_log_print(ANDROID_LOG_FATAL, "Vulkan", "Assert OK.");
     CHECK_RESULT(createSwapchain(base, width, height));
+    CHECK_RESULT(createDepthImage(base, width, height));
+    CHECK_RESULT(createDepthView(base));
     for(i = 0; i < base->imageCount; i++)
     {
-        CHECK_RESULT(createDepthImage(base, width, height, i));
         CHECK_RESULT(createImageViews(base, i));
         CHECK_RESULT(createRenderpass(base, i));
         CHECK_RESULT(createFramebuffer(base, width, height, i));
     }
 }
 
+void makeDescriptorPool(EngineBase *base)
+{
+    CHECK_RESULT(createDescriptorPool(base));
+}
+
 void releaseSurfaceImages(EngineBase *base)
 {
+    vkDestroyImageView(base->devBase.device, base->depth.depthView, NULL);
+    vkFreeMemory(base->devBase.device, base->depth.depthMemory, NULL);
+    vkDestroyImage(base->devBase.device, base->depth.depthImage, NULL);
     for(uint32_t i = 0; i < base->imageCount; i++)
     {
         vkDestroyFramebuffer(base->devBase.device, base->renderImage[i].frameBuffer, NULL);
         vkDestroyRenderPass(base->devBase.device, base->renderImage[i].renderPass, NULL);
-        vkDestroyImageView(base->devBase.device, base->renderImage[i].depthView, NULL);
-        vkDestroyImageView(base->devBase.device, base->renderImage[i].depthView, NULL);
-        vkFreeMemory(base->devBase.device, base->renderImage[i].depthMemory, NULL);
-        vkDestroyImage(base->devBase.device, base->renderImage[i].depthImage, NULL);
         vkDestroyImageView(base->devBase.device, base->renderImage[i].colorView, NULL);
     }
     vkDestroySwapchainKHR(base->devBase.device, base->swapchain, NULL);
@@ -322,7 +338,7 @@ static VkResult createSwapchain(EngineBase *base, uint32_t width, uint32_t heigh
     return result;
 }
 
-static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t height, uint32_t index)
+static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t height)
 {
     uint32_t i;
     uint32_t heapIndex;
@@ -351,12 +367,12 @@ static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t heig
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-    result = vkCreateImage(base->devBase.device, &info, NULL, &base->renderImage[index].depthImage);
+    result = vkCreateImage(base->devBase.device, &info, NULL, &base->depth.depthImage);
 
     if(result == VK_SUCCESS)
     {
         VkMemoryRequirements memReqs;
-        vkGetImageMemoryRequirements(base->devBase.device, base->renderImage[index].depthImage, &memReqs);
+        vkGetImageMemoryRequirements(base->devBase.device, base->depth.depthImage, &memReqs);
 
         VkPhysicalDeviceMemoryProperties props;
         vkGetPhysicalDeviceMemoryProperties(base->devBase.gpu, &props);
@@ -380,11 +396,39 @@ static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t heig
 
         if(result == VK_SUCCESS)
         {
-            base->renderImage[index].depthMemory = memory;
-            result = vkBindImageMemory(base->devBase.device, base->renderImage[index].depthImage, memory, 0);
+            base->depth.depthMemory = memory;
+            result = vkBindImageMemory(base->devBase.device, base->depth.depthImage, memory, 0);
         }
     }
     return result;
+}
+
+static VkResult createDepthView(EngineBase *base)
+{
+    VkImageSubresourceRange subresourceRange;
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.layerCount = 1;
+
+    VkComponentMapping component;
+    component.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    VkImageViewCreateInfo depthInfo;
+    depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    depthInfo.pNext = NULL;
+    depthInfo.flags = 0;
+    depthInfo.image = base->depth.depthImage;
+    depthInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    depthInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthInfo.components = component;
+    depthInfo.subresourceRange = subresourceRange;
+
+    return vkCreateImageView(base->devBase.device, &depthInfo, NULL, &base->depth.depthView);
 }
 
 static VkResult createImageViews(EngineBase *base, uint32_t index)
@@ -418,30 +462,14 @@ static VkResult createImageViews(EngineBase *base, uint32_t index)
 
     if(result == VK_SUCCESS)
     {
-        subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        subresourceRange.baseArrayLayer = 0;
-        subresourceRange.baseMipLevel = 0;
-        subresourceRange.levelCount = 1;
-        subresourceRange.layerCount = 1;
 
-        VkImageViewCreateInfo depthInfo;
-        depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        depthInfo.pNext = NULL;
-        depthInfo.flags = 0;
-        depthInfo.image = base->renderImage[index].depthImage;
-        depthInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        depthInfo.format = VK_FORMAT_D32_SFLOAT;
-        depthInfo.components = component;
-        depthInfo.subresourceRange = subresourceRange;
-
-        result = vkCreateImageView(base->devBase.device, &depthInfo, NULL, &base->renderImage[index].depthView);
     }
     return result;
 }
 
 static VkResult createFramebuffer(EngineBase *base, uint32_t width, uint32_t height, uint32_t index)
 {
-    VkImageView attachments[2] = {base->renderImage[index].colorView, base->renderImage[index].depthView};
+    VkImageView attachments[2] = {base->renderImage[index].colorView, base->depth.depthView};
 
     VkFramebufferCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -488,14 +516,22 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     depthRef.attachment = 1;
     depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkSubpassDependency depens;
-    depens.dependencyFlags = 0;
-    depens.srcSubpass = VK_SUBPASS_EXTERNAL;
-    depens.srcAccessMask = 0;
-    depens.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    depens.dstSubpass = 0;
-    depens.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    depens.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubpassDependency depens[2];
+    depens[0].dependencyFlags = 0;
+    depens[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    depens[0].srcAccessMask = 0;
+    depens[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    depens[0].dstSubpass = 0;
+    depens[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    depens[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    depens[1].dependencyFlags = 0;
+    depens[1].srcSubpass = VK_SUBPASS_EXTERNAL;
+    depens[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    depens[1].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    depens[1].dstSubpass = 0;
+    depens[1].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    depens[1].dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 
     VkSubpassDescription subpass;
     subpass.flags = 0;
@@ -517,8 +553,8 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     info.pAttachments = attachments;
     info.subpassCount = 1;
     info.pSubpasses = &subpass;
-    info.dependencyCount = 1;
-    info.pDependencies = &depens;
+    info.dependencyCount = 2;
+    info.pDependencies = depens;
 
     return vkCreateRenderPass(base->devBase.device, &info, NULL, &base->renderImage[index].renderPass);
 }
@@ -540,7 +576,7 @@ static VkResult createDescriptorPool(EngineBase *base)
     uniforms[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uniforms[0].descriptorCount = 1;
 
-    uniforms[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+    uniforms[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uniforms[1].descriptorCount = 1;
 
     VkDescriptorPoolCreateInfo info;
@@ -548,7 +584,7 @@ static VkResult createDescriptorPool(EngineBase *base)
     info.poolSizeCount = 2;
     info.pPoolSizes = uniforms;
     info.flags = 0;
-    info.maxSets = 1;
+    info.maxSets = 2;
 
     return vkCreateDescriptorPool(base->devBase.device, &info, NULL, &base->renderRes.descrPool);
 }
@@ -580,6 +616,38 @@ void *mainLoop(void* args)
     result = vkCreateSemaphore(base->devBase.device, &semaphoreInfo[1], NULL, &submit);
     __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "Senmaphore Creation: %d", result);
 
+    VkDescriptorBufferInfo writeBuffers[2];
+    writeBuffers[0].offset = 0;
+    writeBuffers[0].range = 64;
+    writeBuffers[0].buffer = currentScene->memory.uniformBuffers[0];
+
+    VkWriteDescriptorSet write[2];
+    write[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write[0].pNext = NULL;
+    write[0].descriptorCount = 1;
+    write[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write[0].pBufferInfo = &writeBuffers[0];
+    write[0].dstArrayElement = 0;
+    write[0].dstBinding = 0;
+    write[0].dstSet = currentScene->pipeline.descriptors[0];
+    write[0].pImageInfo = NULL;
+    write[0].pTexelBufferView = NULL;
+
+    writeBuffers[1].offset = 0;
+    writeBuffers[1].range = 12;
+    writeBuffers[1].buffer = currentScene->memory.uniformBuffers[1];
+
+    write[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write[1].pNext = NULL;
+    write[1].descriptorCount = 1;
+    write[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write[1].pBufferInfo = &writeBuffers[1];
+    write[1].dstArrayElement = 0;
+    write[1].dstBinding = 1;
+    write[1].dstSet = currentScene->pipeline.descriptors[1];
+    write[1].pImageInfo = NULL;
+    write[1].pTexelBufferView = NULL;
+    __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "%X", currentScene->pipeline.descriptors[1]);
     VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submitInfo;
@@ -602,8 +670,31 @@ void *mainLoop(void* args)
     presentInfo.pResults = &result;
     presentInfo.pSwapchains = &base->swapchain;
 
+    void *vertexUniforms, *fragmentUniforms;
+
+    float alpha = 0.0, cosa = 1.0, sina = 0.0;
+    float lightPos[3] = {10.0, 10.0, 0.0};
+
+    vkMapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[1], (VkDeviceSize)0, (VkDeviceSize)12, 0, &fragmentUniforms);
+    memcpy(fragmentUniforms, viewMat, 12);
+    vkUnmapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[1]);
+
     while(running)
     {
+        alpha += 0.02f;
+        cosa = cos(alpha);
+        sina = sin(alpha);
+
+        viewMat[5]  = 10.0 * cosa;
+        viewMat[6]  = 10.0 * sina;
+        viewMat[9]  = 10.0 * -sina;
+        viewMat[10] = 10.0 * cosa;
+        vkMapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[0], (VkDeviceSize)0, (VkDeviceSize)64, 0, &vertexUniforms);
+        memcpy(vertexUniforms, viewMat, 64);
+        vkUnmapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[0]);
+
+        vkUpdateDescriptorSets(base->devBase.device, 1, write, 0, NULL);
+
         vkAcquireNextImageKHR(base->devBase.device, base->swapchain, UINT64_MAX, acquire, VK_NULL_HANDLE, &imgIndex);
         submitInfo.pCommandBuffers = &currentScene->pipeline.cmdBuffers[imgIndex];
         vkQueueSubmit(base->queue, 1, &submitInfo,VK_NULL_HANDLE);

@@ -6,7 +6,21 @@
 
 #include <string.h>
 #include <android/log.h>
+#include <math.h>
 #include "scene_elements.h"
+
+float zNear = 0.1f;
+float zFar = 100.0f;
+float fovy = 3.14159265f / 4.0f;
+
+float persp[32] =
+    {
+        1.0f / tan(fovy), 0.0, 0.0, 0.0,
+        0.0, 1.0f / tan(fovy), 0.0, 0.0,
+        0.0, 0.0, (zFar + zNear)/(zFar-zNear), zFar*zNear/(zFar-zNear),
+        0.0, 0.0, 1.0, 0.0,
+    };
+
 
 static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height);
 
@@ -27,6 +41,7 @@ void resumeMainMenu(EngineBase *base, RenderScene *scene, uint32_t width, uint32
 
 static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
 {
+    float ratio = (float)width/(float)height;
     VkResult result = VK_SUCCESS;
     VkRect2D area;
     area.offset.x = 0;
@@ -41,9 +56,9 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
 
     VkClearValue clearVals[2];
     memset(clearVals[0].color.float32, 0, sizeof(clearVals[0].color.float32));
-    clearVals[0].color.float32[2] = 1.0;
+    clearVals[0].color.float32[2] = 0.0;
     clearVals[0].color.float32[3] = 1.0;
-    clearVals[1].depthStencil.depth = 0.0f;
+    clearVals[1].depthStencil.depth = 1.0f;
     clearVals[1].depthStencil.stencil = 0;
 
     VkCommandBufferBeginInfo info;
@@ -53,6 +68,8 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
     info.pInheritanceInfo = NULL;
 
     VkDeviceSize offset = 0;
+
+    persp[5] = ratio / tan(fovy);
     for(uint32_t i = 0; i < base->imageCount && result == VK_SUCCESS; i++)
     {
         VkRenderPassBeginInfo rpBegInfo;
@@ -67,8 +84,10 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
         result = vkBeginCommandBuffer(scene->pipeline.cmdBuffers[i], &info);
         vkCmdBeginRenderPass(scene->pipeline.cmdBuffers[i], &rpBegInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipeline[i]);
-        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 1, &scene->memory.vertexBuffers[0], &offset);
-        vkCmdDraw(scene->pipeline.cmdBuffers[i], 4, 1, 0, 0);
+        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 1, &scene->memory.modelBuffers[0].vertexBuffer, &offset);
+        vkCmdBindDescriptorSets(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipelineLayout, 0, 1,scene->pipeline.descriptors, 0, NULL);
+        vkCmdPushConstants(scene->pipeline.cmdBuffers[i], scene->pipeline.pipelineLayout, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, sizeof(persp), persp);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], scene->memory.modelBuffers[0].vertexCount, 1, 0, 0);
         vkCmdEndRenderPass(scene->pipeline.cmdBuffers[i]);
         vkEndCommandBuffer(scene->pipeline.cmdBuffers[i]);
     }

@@ -6,13 +6,16 @@
 #define REACTIONGAME_MODEL_PROCESSOR_H
 
 #include <stdint.h>
+#include "vulkan_renderer.h"
 
-void beginModel(uint16_t vertexCount, uint16_t uvCount, uint16_t normalCount, uint16_t triangleCount);
+void beginModel(uint16_t positionCount, uint16_t uvCount, uint16_t normalCount, uint16_t vertexCount);
 
 void processPositionLine(char *line, uint32_t len);
 void processTextureLine(char *line, uint32_t len);
 void processNormalLine(char *line, uint32_t len);
 void processTriangleLine(char *line, uint32_t len);
+
+void makeVulkanBuffers(EngineBase *base, RenderScene *scene);
 
 void endModel();
 

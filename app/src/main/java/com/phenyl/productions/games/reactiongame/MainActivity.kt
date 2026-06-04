@@ -110,6 +110,12 @@ class MainActivity : AppCompatActivity() {
         appPause();
     }
 
+    override fun onStop()
+    {
+        super.onStop();
+        appStop();
+    }
+
     companion object {
         // Used to load the 'native-lib' library on application startup.
         init {
@@ -120,6 +126,7 @@ class MainActivity : AppCompatActivity() {
     external fun initApp();
     external fun appResume();
     external fun appPause();
+    external fun appStop();
     external fun addShaderBytes(bytes:ByteArray, index:Int);
     external fun beginModel(vertexCount:Int, uvCount:Int, normalCount:Int, triangleCount:Int);
     external fun addLine(ln:String);
