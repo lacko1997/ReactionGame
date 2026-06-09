@@ -18,7 +18,7 @@ typedef struct SpirVCodes
 
 static SpirVCodes codes[MAX_NUM_OF_SPV_CODES * 2];
 
-static VkVertexInputAttributeDescription attribs[5];
+static VkVertexInputAttributeDescription attribs[7];
 static VkVertexInputBindingDescription bindings[2];
 static VkPipelineVertexInputStateCreateInfo inputAttribs;
 static VkPipelineShaderStageCreateInfo shaderStages[2];
@@ -163,16 +163,40 @@ static void fillModelPipelineInputAttribs()
     attribs[2].offset = 5 * sizeof(float);
     attribs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
 
+    attribs[3].location = 3;
+    attribs[3].binding = 1;
+    attribs[3].offset = 0 * sizeof(float);
+    attribs[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+    attribs[4].location = 4;
+    attribs[4].binding = 1;
+    attribs[4].offset = 4 * sizeof(float);
+    attribs[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+    attribs[5].location = 5;
+    attribs[5].binding = 1;
+    attribs[5].offset = 8 * sizeof(float);
+    attribs[5].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+    attribs[6].location = 6;
+    attribs[6].binding = 1;
+    attribs[6].offset = 12 * sizeof(float);
+    attribs[6].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+
     bindings[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     bindings[0].stride = 8 * sizeof(float);
     bindings[0].binding = 0;
+
+    bindings[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+    bindings[1].stride = 16 * sizeof(float);
+    bindings[1].binding = 1;
 
     inputAttribs.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     inputAttribs.pNext = NULL;
     inputAttribs.flags = 0;
     inputAttribs.vertexBindingDescriptionCount = 1;
     inputAttribs.pVertexBindingDescriptions = bindings;
-    inputAttribs.vertexAttributeDescriptionCount = 3;
+    inputAttribs.vertexAttributeDescriptionCount = 7;
     inputAttribs.pVertexAttributeDescriptions = attribs;
 }
 
@@ -242,7 +266,7 @@ static void fillModelPipelineDepthStencilStage()
     depthInfo.depthWriteEnable = VK_TRUE;
     depthInfo.minDepthBounds = 0.0f;
     depthInfo.maxDepthBounds = 1.0f;
-    depthInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthInfo.depthCompareOp = VK_COMPARE_OP_LESS;
     depthInfo.stencilTestEnable = VK_FALSE;
     depthInfo.back = back;
     depthInfo.front = front;

@@ -9,7 +9,7 @@
 #include <math.h>
 #include "scene_elements.h"
 
-float zNear = 0.1f;
+float zNear = 1.0f;
 float zFar = 100.0f;
 float fovy = 3.14159265f / 4.0f;
 
@@ -18,7 +18,7 @@ float persp[32] =
         1.0f / tan(fovy), 0.0, 0.0, 0.0,
         0.0, 1.0f / tan(fovy), 0.0, 0.0,
         0.0, 0.0, (zFar + zNear)/(zFar-zNear), zFar*zNear/(zFar-zNear),
-        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, -1.0, 0.0,
     };
 
 

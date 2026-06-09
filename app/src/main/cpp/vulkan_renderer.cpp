@@ -29,10 +29,10 @@ static VkResult createDescriptorPool(EngineBase *base);
 
 static float viewMat[16] =
     {
-        10.0, 0.0, 0.0, 0.0,
+        1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 50.0, 1.0
+        0.0, 0.0, 3.0, 1.0
     };
 
 VkDebugUtilsMessengerEXT messenger;
@@ -413,10 +413,10 @@ static VkResult createDepthView(EngineBase *base)
     subresourceRange.layerCount = 1;
 
     VkComponentMapping component;
-    component.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    component.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    component.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    component.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    component.r = VK_COMPONENT_SWIZZLE_R;
+    component.g = VK_COMPONENT_SWIZZLE_G;
+    component.b = VK_COMPONENT_SWIZZLE_B;
+    component.a = VK_COMPONENT_SWIZZLE_A;
 
     VkImageViewCreateInfo depthInfo;
     depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -516,22 +516,14 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     depthRef.attachment = 1;
     depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkSubpassDependency depens[2];
-    depens[0].dependencyFlags = 0;
-    depens[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    depens[0].srcAccessMask = 0;
-    depens[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    depens[0].dstSubpass = 0;
-    depens[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    depens[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-    depens[1].dependencyFlags = 0;
-    depens[1].srcSubpass = VK_SUBPASS_EXTERNAL;
-    depens[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    depens[1].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    depens[1].dstSubpass = 0;
-    depens[1].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    depens[1].dstStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    VkSubpassDependency depens;
+    depens.dependencyFlags = 0;
+    depens.srcSubpass = VK_SUBPASS_EXTERNAL;
+    depens.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    depens.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;;
+    depens.dstSubpass = 0;
+    depens.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    depens.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 
     VkSubpassDescription subpass;
     subpass.flags = 0;
@@ -553,8 +545,8 @@ static VkResult createRenderpass(EngineBase *base, uint32_t index)
     info.pAttachments = attachments;
     info.subpassCount = 1;
     info.pSubpasses = &subpass;
-    info.dependencyCount = 2;
-    info.pDependencies = depens;
+    info.dependencyCount = 1;
+    info.pDependencies = &depens;
 
     return vkCreateRenderPass(base->devBase.device, &info, NULL, &base->renderImage[index].renderPass);
 }
@@ -685,10 +677,10 @@ void *mainLoop(void* args)
         cosa = cos(alpha);
         sina = sin(alpha);
 
-        viewMat[5]  = 10.0 * cosa;
-        viewMat[6]  = 10.0 * sina;
-        viewMat[9]  = 10.0 * -sina;
-        viewMat[10] = 10.0 * cosa;
+        viewMat[5]  = cosa;
+        viewMat[6]  = sina;
+        viewMat[9]  = -sina;
+        viewMat[10] = cosa;
         vkMapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[0], (VkDeviceSize)0, (VkDeviceSize)64, 0, &vertexUniforms);
         memcpy(vertexUniforms, viewMat, 64);
         vkUnmapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[0]);
