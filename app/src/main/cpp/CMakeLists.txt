@@ -15,9 +15,11 @@ add_library(native-lib
 
             pipelines.cpp
             scene_elements.cpp
-            vulkan_renderer.cpp
+            scene_manager.cpp
             main_menu.cpp
+            game_area.cpp
             model_processor.cpp
+            vulkan_renderer.cpp
             native-lib.cpp)
 
 

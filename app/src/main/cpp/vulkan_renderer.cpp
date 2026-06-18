@@ -1,5 +1,6 @@
 //
 // Created by lacko on 3/12/26.
+// kkOJPp7gbvVocAL
 //
 #include "vulkan_renderer.h"
 
@@ -25,7 +26,7 @@ static VkResult createDepthImage(EngineBase *base, uint32_t width, uint32_t heig
 static VkResult createFramebuffer(EngineBase *base, uint32_t width, uint32_t height, uint32_t index);
 static VkResult createRenderpass(EngineBase *base, uint32_t index);
 static VkResult createCommandPool(EngineBase *base);
-static VkResult createDescriptorPool(EngineBase *base);
+static VkResult createDescriptorPool(EngineBase *base, RenderScene *scene);
 
 static float viewMat[16] =
     {
@@ -68,9 +69,9 @@ void makeRenderImage(EngineBase *base, uint32_t width, uint32_t height)
     }
 }
 
-void makeDescriptorPool(EngineBase *base)
+void makeDescriptorPool(EngineBase *base, RenderScene *scene)
 {
-    CHECK_RESULT(createDescriptorPool(base));
+    CHECK_RESULT(createDescriptorPool(base, scene));
 }
 
 void releaseSurfaceImages(EngineBase *base)
@@ -559,10 +560,10 @@ static VkResult createCommandPool(EngineBase *base)
     info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     info.queueFamilyIndex = base->queueFamilyIndex;
 
-    return vkCreateCommandPool(base->devBase.device, &info, NULL, &base->renderRes.cmdPool);
+    return vkCreateCommandPool(base->devBase.device, &info, NULL, &base->cmdPool);
 }
 
-static VkResult createDescriptorPool(EngineBase *base)
+static VkResult createDescriptorPool(EngineBase *base, RenderScene *scene)
 {
     VkDescriptorPoolSize uniforms[2];
     uniforms[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -578,7 +579,7 @@ static VkResult createDescriptorPool(EngineBase *base)
     info.flags = 0;
     info.maxSets = 2;
 
-    return vkCreateDescriptorPool(base->devBase.device, &info, NULL, &base->renderRes.descrPool);
+    return vkCreateDescriptorPool(base->devBase.device, &info, NULL, &scene->pipeline.descrPool);
 }
 
 void setCurrentScene(RenderScene *scene)
@@ -639,7 +640,7 @@ void *mainLoop(void* args)
     write[1].dstSet = currentScene->pipeline.descriptors[1];
     write[1].pImageInfo = NULL;
     write[1].pTexelBufferView = NULL;
-    __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "%X", currentScene->pipeline.descriptors[1]);
+    __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "%X", currentScene->pipeline.descriptors[0]);
     VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submitInfo;
@@ -692,6 +693,7 @@ void *mainLoop(void* args)
         vkQueueSubmit(base->queue, 1, &submitInfo,VK_NULL_HANDLE);
 
         presentInfo.pImageIndices = &imgIndex;
+        __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "%d", imgIndex);
         vkQueuePresentKHR(base->queue, &presentInfo);
     }
     return NULL;

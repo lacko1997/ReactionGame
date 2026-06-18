@@ -25,12 +25,6 @@ typedef struct RenderBase
     VkRenderPass renderPass;
 }RenderImage;
 
-typedef struct RenderRes
-{
-    VkCommandPool cmdPool;
-    VkDescriptorPool descrPool;
-}RenderRes;
-
 typedef struct DepthBuffer
 {
     VkImage depthImage;
@@ -47,7 +41,7 @@ typedef struct EngineBase
     uint32_t imageCount;
     DepthBuffer depth;
     RenderImage *renderImage;
-    RenderRes renderRes;
+    VkCommandPool cmdPool;
 }EngineBase;
 
 typedef struct Model
@@ -55,6 +49,8 @@ typedef struct Model
     uint32_t vertexCount;
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
+    VkBuffer instanceBuffer;
+    VkDeviceMemory instanceBufferMemory;
     VkBuffer indexBuffer;
     VkDeviceMemory indexBufferMemory;
 }Model;
@@ -77,6 +73,7 @@ typedef struct SceneMemory
 typedef struct PipelineElements
 {
     VkPipelineLayout pipelineLayout;
+    VkDescriptorPool  descrPool;
     VkDescriptorSet descriptors[2];
     VkDescriptorSetLayout descriptorSetLayout;
     VkShaderModule modules[2];
@@ -111,7 +108,7 @@ extern bool running;
 void makeEngineBase(EngineBase *base);
 void makeSurface(EngineBase *base, struct ANativeWindow *wnd);
 void makeRenderImage(EngineBase *base, uint32_t width, uint32_t height);
-void makeDescriptorPool(EngineBase *base);
+void makeDescriptorPool(EngineBase *base, RenderScene *scene);
 void setCurrentScene(RenderScene *scene);
 void *mainLoop(void* args);
 

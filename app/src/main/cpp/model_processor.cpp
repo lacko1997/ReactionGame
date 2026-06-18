@@ -52,6 +52,14 @@ static uint32_t modelCount = 0;
 static RawModelList start;
 static RawModelList *end = &start;
 
+static float ident[16] =
+    {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+
 void beginModel(uint16_t positionCount, uint16_t uvCount, uint16_t normalCount, uint16_t vertexCount)
 {
     end->model.data.position = (float*)malloc(sizeof(float) * 3 * positionCount);
@@ -214,6 +222,6 @@ void makeVulkanBuffers(EngineBase *base, RenderScene *scene)
             }
         }
         scene->memory.modelBuffers->vertexCount = curr->model.element.atTriangle * TRIANGLE_VERTEX_COUNT;
-        makeVertexBuffer(base, scene, i, bufferContent, scene->memory.modelBuffers->vertexCount * VERTEX_FLOAT_COUNT_STRIDE);
+        makeVertexBuffer(base, scene, i, bufferContent, ident, scene->memory.modelBuffers->vertexCount * VERTEX_FLOAT_COUNT_STRIDE, 16);
     }
 }

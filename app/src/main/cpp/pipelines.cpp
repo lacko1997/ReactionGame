@@ -56,7 +56,7 @@ void putSpvCode(uint32_t index, char* byteArray, uint32_t byteCount)
 void makeModelPipeline(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
 {
     createModelDescriptorSetLayout(base, scene);
-    createModelPipelineLayout(base, scene);
+    CHECK_RESULT(createModelPipelineLayout(base, scene));
     fillModelPipelineInputAttribs();
     CHECK_RESULT(createShaderModule(base, scene, MODEL_SHADER_MODULE_INDEX * 2 + 0));
     CHECK_RESULT(createShaderModule(base, scene, MODEL_SHADER_MODULE_INDEX * 2 + 1));
@@ -196,7 +196,7 @@ static void fillModelPipelineInputAttribs()
     inputAttribs.flags = 0;
     inputAttribs.vertexBindingDescriptionCount = 1;
     inputAttribs.pVertexBindingDescriptions = bindings;
-    inputAttribs.vertexAttributeDescriptionCount = 7;
+    inputAttribs.vertexAttributeDescriptionCount = 3;
     inputAttribs.pVertexAttributeDescriptions = attribs;
 }
 

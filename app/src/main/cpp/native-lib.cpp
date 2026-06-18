@@ -4,15 +4,13 @@
 #include <android/native_window_jni.h>
 #include <android/log.h>
 
-#include "vulkan_renderer.h"
+
 #include "model_processor.h"
-#include "main_menu.h"
-#include "scene_elements.h"
+#include "game_area.h"
 #include "pipelines.h"
+#include "scene_manager.h"
 
 EngineBase base;
-RenderScene mainMenu_scene;
-
 pthread_t thread;
 
 bool createFinished = false;
@@ -41,9 +39,7 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_createVulkanSurfac
     makeSurface(&base, wnd);
     if(!resumed)
     {
-        mainMenu_scene.memory.modelBuffers = (Model*) malloc(sizeof(Model));
-        mainMenu_scene.memory.uniformBuffers = (VkBuffer*)malloc(sizeof(VkBuffer) * 2);
-        mainMenu_scene.memory.uniformBufferMemories = (VkDeviceMemory*)malloc(sizeof(VkDeviceMemory) * 2);
+        sceneManager_allocateSceneMemory(0, 2, 2);
     }
     createFinished = true;
 }
@@ -53,22 +49,9 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_surfaceChanged(JNI
         jobject thiz, jint width, jint height)
 {
         makeRenderImage(&base, width, height);
-        makeModelPipeline(&base, &mainMenu_scene, width, height);
-        makeDescriptorPool(&base);
-        makeDescriptorSets(&base, &mainMenu_scene);
+        makeScenes(&base, width, height);
+        setCurrentScene(sceneManager_getScene(0));
 
-        if(!resumed)
-        {
-            makeVulkanBuffers(&base, &mainMenu_scene);
-            makeUniformBuffer(&base, &mainMenu_scene, 16, 0);
-            makeUniformBuffer(&base, &mainMenu_scene, 3, 1);
-            makeMainMenu(&base, &mainMenu_scene, width, height);
-        }
-        else
-        {
-            resumeMainMenu(&base, &mainMenu_scene, width, height);
-        }
-        setCurrentScene(&mainMenu_scene);
         changedFinished = true;
 }
 
@@ -149,7 +132,7 @@ Java_com_phenyl_productions_games_reactiongame_MainActivity_appPause(JNIEnv *env
     running = false;
     pthread_join(thread, NULL);
 
-    releasePipeline(&base, &mainMenu_scene);
+    sceneMamager_releaseScenes(&base);
     releaseSurfaceImages(&base);
 }
 extern "C" JNIEXPORT void JNICALL

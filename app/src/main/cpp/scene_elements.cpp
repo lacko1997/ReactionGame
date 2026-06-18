@@ -8,8 +8,9 @@
 
 static VkResult createTextureImage(EngineBase *base, SceneMemory *memory, uint32_t width, uint32_t height, uint32_t index);
 static VkResult createSampler(EngineBase *base, RenderScene *scene, uint32_t samplerIndex);
-static VkResult createBuffer(EngineBase *base, RenderScene*, uint32_t size, uint32_t index, VkBufferUsageFlags usage);
-static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
+static VkResult createBuffer(EngineBase *base, RenderScene*, uint32_t size, uint32_t index, VkBufferUsageFlags usage, VkBool32 instanceBuffer);
+static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t vertexFloatCount,uint32_t instanceFloatCount, uint32_t index);
+static VkResult createInstanceBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 static VkResult createIndexBuffer(EngineBase *base, RenderScene *scene, uint32_t indexCount, uint32_t index);
 static VkResult createUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene);
@@ -28,13 +29,17 @@ void makeTexture(EngineBase *base, RenderScene *scene, uint32_t textureCount, Te
     }
 }
 
-void makeVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t index, float *vertexData, uint32_t floatCount)
+void makeVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t index, float *vertexData, float *instanceData, uint32_t vertexFloatCount, uint32_t instanceFloatCount)
 {
     void *data;
-    CHECK_RESULT(createVertexBuffer(base, scene, floatCount, index));
-    vkMapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory, 0, sizeof(float) * floatCount, 0, &data);
-    memcpy(data, vertexData, sizeof(float) * floatCount);
+    CHECK_RESULT(createVertexBuffer(base, scene, vertexFloatCount, 16, index));
+    vkMapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory, 0, sizeof(float) * vertexFloatCount, 0, &data);
+    memcpy(data, vertexData, sizeof(float) * vertexFloatCount);
     vkUnmapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory);
+
+    vkMapMemory(base->devBase.device, scene->memory.modelBuffers[index].instanceBufferMemory, 0, sizeof(float) * instanceFloatCount, 0, &data);
+    memcpy(data, vertexData, sizeof(float) * vertexFloatCount);
+    vkUnmapMemory(base->devBase.device, scene->memory.modelBuffers[index].instanceBufferMemory);
 };
 
 void makeUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index)
@@ -138,7 +143,7 @@ static VkResult createSampler(EngineBase *base, RenderScene *scene, uint32_t sam
     return vkCreateSampler(base->devBase.device, &info, NULL, &scene->memory.sampler[samplerIndex]);
 }
 
-static VkResult createBuffer(EngineBase *base, RenderScene *scene, uint32_t size, uint32_t index, VkBufferUsageFlags usage)
+static VkResult createBuffer(EngineBase *base, RenderScene *scene, uint32_t size, uint32_t index, VkBufferUsageFlags usage, VkBool32 instanceBuffer)
 {
     VkResult result;
     VkBuffer *outputBuffer = NULL;
@@ -151,8 +156,16 @@ static VkResult createBuffer(EngineBase *base, RenderScene *scene, uint32_t size
     }
     else if(usage == VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
     {
-        outputBuffer = &scene->memory.modelBuffers[index].vertexBuffer;
-        outputMemory = &scene->memory.modelBuffers[index].vertexBufferMemory;
+        if(instanceBuffer == VK_FALSE)
+        {
+            outputBuffer = &scene->memory.modelBuffers[index].vertexBuffer;
+            outputMemory = &scene->memory.modelBuffers[index].vertexBufferMemory;
+        }
+        else
+        {
+            outputBuffer = &scene->memory.modelBuffers[index].instanceBuffer;
+            outputMemory = &scene->memory.modelBuffers[index].instanceBufferMemory;
+        }
     }
     else if(usage == VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
     {
@@ -207,19 +220,24 @@ static VkResult createBuffer(EngineBase *base, RenderScene *scene, uint32_t size
     return result;
 }
 
-static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index)
+static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t vertexFloatCount, uint32_t instanceFloatCount, uint32_t index)
 {
-    return createBuffer(base, scene, floatCount * sizeof(float), index, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    VkResult result = createBuffer(base, scene, vertexFloatCount * sizeof(float), index, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_FALSE);
+    if(result == VK_SUCCESS && instanceFloatCount > 0)
+    {
+        result = createBuffer(base, scene, instanceFloatCount * sizeof(float), index, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_TRUE);
+    }
+    return result;
 }
 
 static VkResult createUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index)
 {
-    return createBuffer(base, scene, floatCount * sizeof(float), index, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    return createBuffer(base, scene, floatCount * sizeof(float), index, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_FALSE);
 }
 
 static VkResult createIndexBuffer(EngineBase *base, RenderScene *scene, uint32_t indexCount, uint32_t index)
 {
-    return createBuffer(base, scene, index * sizeof(uint16_t), index, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    return createBuffer(base, scene, index * sizeof(uint16_t), index, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_FALSE);
 }
 
 static VkResult createDescriptorSets(EngineBase *base, RenderScene *scene)
@@ -229,7 +247,7 @@ static VkResult createDescriptorSets(EngineBase *base, RenderScene *scene)
     info.pNext = NULL;
     info.descriptorSetCount = 1;
     info.pSetLayouts = &scene->pipeline.descriptorSetLayout;
-    info.descriptorPool = base->renderRes.descrPool;
+    info.descriptorPool = scene->pipeline.descrPool;
 
     return vkAllocateDescriptorSets(base->devBase.device, &info, scene->pipeline.descriptors);
 }
@@ -239,7 +257,7 @@ static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene)
     VkCommandBufferAllocateInfo info;
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     info.pNext = NULL;
-    info.commandPool = base->renderRes.cmdPool;
+    info.commandPool = base->cmdPool;
     info.commandBufferCount = base->imageCount;
     info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
