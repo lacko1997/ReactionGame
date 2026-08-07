@@ -13,17 +13,13 @@
 EngineBase base;
 pthread_t thread;
 
-bool createFinished = false;
-bool changedFinished = false;
 
 bool paused = false, resumed = false;
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_drawFrame(JNIEnv *env, jobject thiz)
 {
-    while(!createFinished && !changedFinished);
     pthread_create(&thread, NULL, mainLoop, &base);
-
     __android_log_print(ANDROID_LOG_FATAL, "APP", "Surface created, running ...");
 }
 
@@ -39,32 +35,30 @@ Java_com_phenyl_productions_games_reactiongame_RenderActivity_createVulkanSurfac
     makeSurface(&base, wnd);
     if(!resumed)
     {
-        sceneManager_allocateSceneMemory(0, 2, 2);
+        sceneManager_allocateSceneMemory(0, 3, 2);
     }
-    createFinished = true;
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_RenderActivity_surfaceChanged(JNIEnv *env,
         jobject thiz, jint width, jint height)
 {
-        makeRenderImage(&base, width, height);
-        makeScenes(&base, width, height);
-        setCurrentScene(sceneManager_getScene(0));
-
-        changedFinished = true;
+    makeRenderImage(&base, width, height);
+    makeScenes(&base, width, height);
+    setCurrentScene(sceneManager_getScene(0));
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_phenyl_productions_games_reactiongame_MainActivity_addLine(JNIEnv *env, jobject thiz, jstring ln)
 {
-    char currentLine[256];
+    const uint32_t maxLineLenghth = 256;
+    char currentLine[maxLineLenghth];
     const char *line = env->GetStringUTFChars(ln, nullptr);
     uint32_t len = env->GetStringUTFLength(ln);
 
-    len = (len < 256) ? len : 256;
-
+    len = (len < maxLineLenghth) ? len : maxLineLenghth;
     memcpy(currentLine, line, len);
+    currentLine[len] = 0;
     if(currentLine[0] == 'v' && currentLine[1] == ' ')
     {
         processPositionLine(currentLine, len);

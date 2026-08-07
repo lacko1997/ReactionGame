@@ -17,7 +17,7 @@ float zNear = 1.0f;
 float zFar = 100.0f;
 float fovy = 3.14159265f / 4.0f;
 
-float persp[32] =
+float persp[16] =
         {
                 1.0f / tan(fovy), 0.0, 0.0, 0.0,
                 0.0, 1.0f / tan(fovy), 0.0, 0.0,
@@ -56,7 +56,10 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
     clearVals[1].depthStencil.stencil = 0;
 
     VkDeviceSize offsets[2] = {0, 0};
-    VkBuffer buffers[2] = {scene->memory.modelBuffers[0].vertexBuffer, scene->memory.modelBuffers[0].instanceBuffer};
+    VkBuffer bulbBuffers[2] = {scene->memory.modelBuffers[0].vertexBuffer, scene->memory.modelBuffers[0].instanceBuffer};
+    VkBuffer baseBuffers[2] = {scene->memory.modelBuffers[1].vertexBuffer, scene->memory.modelBuffers[1].instanceBuffer};
+    VkBuffer buttonBuffers[2] = {scene->memory.modelBuffers[2].vertexBuffer, scene->memory.modelBuffers[2].instanceBuffer};
+    VkBuffer gameTable[2] = {scene->memory.modelBuffers[3].vertexBuffer, scene->memory.modelBuffers[3].instanceBuffer};
     persp[5] = ratio / tan(fovy);
     for(uint32_t i = 0; i < base->imageCount; i++)
     {
@@ -72,10 +75,16 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
         result = vkBeginCommandBuffer(scene->pipeline.cmdBuffers[i], &info);
         vkCmdBeginRenderPass(scene->pipeline.cmdBuffers[i], &passInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipeline[i]);
-        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 1, buffers, offsets);
+        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 2, bulbBuffers, offsets);
         vkCmdBindDescriptorSets(scene->pipeline.cmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, scene->pipeline.pipelineLayout, 0, 1, scene->pipeline.descriptors, 0,NULL);
         vkCmdPushConstants(scene->pipeline.cmdBuffers[i], scene->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(persp) , persp);
-        vkCmdDraw(scene->pipeline.cmdBuffers[i], scene->memory.modelBuffers[0].vertexCount, 1, 0, 0);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], scene->memory.modelBuffers[0].vertexCount, scene->memory.modelBuffers[0].instanceCount, 0, 0);
+        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 2, baseBuffers, offsets);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], scene->memory.modelBuffers[1].vertexCount, scene->memory.modelBuffers[1].instanceCount, 0, 0);
+        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 2, buttonBuffers, offsets);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], scene->memory.modelBuffers[2].vertexCount, scene->memory.modelBuffers[2].instanceCount, 0, 0);
+        vkCmdBindVertexBuffers(scene->pipeline.cmdBuffers[i], 0, 2, gameTable, offsets);
+        vkCmdDraw(scene->pipeline.cmdBuffers[i], scene->memory.modelBuffers[3].vertexCount, 1, 0, 0);
         vkCmdEndRenderPass(scene->pipeline.cmdBuffers[i]);
         vkEndCommandBuffer(scene->pipeline.cmdBuffers[i]);
     }

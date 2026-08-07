@@ -35,11 +35,6 @@ static VkResult recordCommandBuffer(EngineBase *base, RenderScene *scene, uint32
     area.extent.width = width;
     area.extent.height = height;
 
-    VkClearRect rect;
-    rect.baseArrayLayer = 0;
-    rect.layerCount = 1;
-    rect.rect = area;
-
     VkClearValue clearVals[2];
     memset(clearVals[0].color.float32, 0, sizeof(clearVals[0].color.float32));
     clearVals[0].color.float32[2] = 0.0;

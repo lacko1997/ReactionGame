@@ -56,7 +56,7 @@ void putSpvCode(uint32_t index, char* byteArray, uint32_t byteCount)
 void makeModelPipeline(EngineBase *base, RenderScene *scene, uint32_t width, uint32_t height)
 {
     createModelDescriptorSetLayout(base, scene);
-    CHECK_RESULT(createModelPipelineLayout(base, scene));
+    CHECK_RESULT(createModelPipelineLayout(base, scene)); __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "pipelineLayout: %llX", scene->pipeline.pipelineLayout);
     fillModelPipelineInputAttribs();
     CHECK_RESULT(createShaderModule(base, scene, MODEL_SHADER_MODULE_INDEX * 2 + 0));
     CHECK_RESULT(createShaderModule(base, scene, MODEL_SHADER_MODULE_INDEX * 2 + 1));
@@ -194,9 +194,9 @@ static void fillModelPipelineInputAttribs()
     inputAttribs.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     inputAttribs.pNext = NULL;
     inputAttribs.flags = 0;
-    inputAttribs.vertexBindingDescriptionCount = 1;
+    inputAttribs.vertexBindingDescriptionCount = 2;
     inputAttribs.pVertexBindingDescriptions = bindings;
-    inputAttribs.vertexAttributeDescriptionCount = 3;
+    inputAttribs.vertexAttributeDescriptionCount = 7;
     inputAttribs.pVertexAttributeDescriptions = attribs;
 }
 
@@ -345,7 +345,7 @@ static VkResult createPipeline(EngineBase *base, RenderScene *scene, uint32_t in
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.flags = 0;
     rasterizer.pNext = nullptr;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.depthBiasEnable = VK_TRUE;
     rasterizer.depthBiasSlopeFactor = 0.0;
     rasterizer.depthBiasConstantFactor = 0.01;

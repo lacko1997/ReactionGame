@@ -18,7 +18,7 @@ class MainActivity : AppCompatActivity() {
         var normalCount:Int = 0;
         var triangleCount:Int = 0;
 
-        val reader:BufferedReader = BufferedReader(InputStreamReader(resources.openRawResource(R.raw.button_lamp_base)));
+        val reader:BufferedReader = BufferedReader(InputStreamReader(resources.openRawResource(resourceId)));
         try {
             var ln:String? = reader.readLine();
             while (ln != null)
@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
 
     fun readModelElements(resourceId:Int)
     {
-        val reader:BufferedReader = BufferedReader(InputStreamReader(resources.openRawResource(R.raw.button_lamp_base)));
+        val reader:BufferedReader = BufferedReader(InputStreamReader(resources.openRawResource(resourceId)));
         try {
             var ln:String? = reader.readLine();
             while (ln != null)
@@ -92,10 +92,12 @@ class MainActivity : AppCompatActivity() {
         val renderArea:RenderActivity = RenderActivity(this);
         val layoutSurface:ConstraintLayout = findViewById<ConstraintLayout>(R.id.surface)
 
-        loadModel(R.raw.button_lamp_base);
+        loadModel(R.raw.lightbulb)
+        loadModel(R.raw.button_lamp_base)
+        loadModel(R.raw.button)
 
-        renderArea.holder.addCallback(renderArea);
-        layoutSurface.addView(renderArea);
+        renderArea.holder.addCallback(renderArea)
+        layoutSurface.addView(renderArea)
     }
 
     override fun onResume()

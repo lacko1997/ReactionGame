@@ -18,6 +18,7 @@ add_library(native-lib
             scene_manager.cpp
             main_menu.cpp
             game_area.cpp
+            game_params.cpp
             model_processor.cpp
             vulkan_renderer.cpp
             native-lib.cpp)

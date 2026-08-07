@@ -9,9 +9,12 @@
 #include <android/log.h>
 
 #include "scene_elements.h"
+#include "game_params.h"
 
 #define TRIANGLE_VERTEX_COUNT 3
 #define VERTEX_FLOAT_COUNT_STRIDE 8
+
+const uint32_t perTriangleFloatCount = TRIANGLE_VERTEX_COUNT * VERTEX_FLOAT_COUNT_STRIDE;
 
 typedef struct RawModelIndices
 {
@@ -59,6 +62,8 @@ static float ident[16] =
         0.0f, 0.0f, 1.0f, 0.0f,
         0.0f, 0.0f, 0.0f, 1.0f
     };
+
+static void createDrawableModel(RawModel *model, float *bufferContent);
 
 void beginModel(uint16_t positionCount, uint16_t uvCount, uint16_t normalCount, uint16_t vertexCount)
 {
@@ -186,42 +191,59 @@ void endModel()
 
 void makeVulkanBuffers(EngineBase *base, RenderScene *scene)
 {
-    RawModelList *curr;
-    uint32_t elementCount;
-
-    scene->memory.modelBuffers = (Model*)malloc(sizeof(Model) * modelCount);
-    curr = &start;
-    float *bufferContent;
-
     uint32_t currIndex;
     float *currentVec;
-    const uint32_t perTriangleFloatCount = TRIANGLE_VERTEX_COUNT * VERTEX_FLOAT_COUNT_STRIDE;
+    RawModelList *curr;
+    uint32_t elementCount;
+    uint32_t instanceDataFloatCount;
+
+    float *bufferContent;
+    float *instanceData;
+
+    scene->memory.modelBuffers = (Model*)malloc(sizeof(Model) * (modelCount + 1));
+    curr = &start;
 
     for(uint32_t i = 0; i < modelCount; i++)
     {
         bufferContent = (float*)malloc(sizeof(float) * curr->model.element.atTriangle * perTriangleFloatCount);
+        instanceData = makeInstanceData(&instanceDataFloatCount, i);
+        createDrawableModel(&curr->model, bufferContent);
+        scene->memory.modelBuffers[i].vertexCount = curr->model.element.atTriangle * TRIANGLE_VERTEX_COUNT;
+        scene->memory.modelBuffers[i].instanceCount = getButtonCount();
+        makeVertexBuffer(base, scene, i, bufferContent, instanceData, scene->memory.modelBuffers[i].vertexCount * VERTEX_FLOAT_COUNT_STRIDE, instanceDataFloatCount);
+        curr = curr->next;
+        free(bufferContent);
+        free(instanceData);
+    }
 
-        for(uint32_t j = 0; j < curr->model.element.atTriangle; j++)
+    bufferContent = generateGameTableData(&scene->memory.modelBuffers[modelCount].vertexCount);
+    makeVertexBuffer(base, scene, modelCount, bufferContent, ident, scene->memory.modelBuffers[modelCount].vertexCount * VERTEX_FLOAT_COUNT_STRIDE, sizeof(ident));
+    scene->memory.modelBuffers[modelCount].instanceCount = 1;
+}
+
+static void createDrawableModel(RawModel *model, float *bufferContent)
+{
+    uint32_t currIndex;
+    float *currentVec;
+
+    for(uint32_t j = 0; j < model->element.atTriangle; j++)
+    {
+        for(uint32_t k = 0; k < 3; k++)
         {
-            for(uint32_t k = 0; k < 3; k++)
+            currIndex = model->index.posIndex[j * TRIANGLE_VERTEX_COUNT + k];
+            currentVec = &model->data.position[currIndex * 3];
+            memcpy(&bufferContent[j * perTriangleFloatCount + k * VERTEX_FLOAT_COUNT_STRIDE], currentVec, 3 * sizeof(float));
+
+            if(model->element.atTex != 0)
             {
-                currIndex = curr->model.index.posIndex[j * TRIANGLE_VERTEX_COUNT + k];
-                currentVec = &curr->model.data.position[currIndex * 3];
-                memcpy(&bufferContent[j * perTriangleFloatCount + k * VERTEX_FLOAT_COUNT_STRIDE], currentVec, 3 * sizeof(float));
-
-                if(curr->model.element.atTex != 0)
-                {
-                    currIndex = curr->model.index.texIndex[j * TRIANGLE_VERTEX_COUNT + k];
-                    currentVec = &curr->model.data.texture[currIndex * 2];
-                    memcpy(&bufferContent[j * perTriangleFloatCount + k * VERTEX_FLOAT_COUNT_STRIDE + 3], currentVec, 2 * sizeof(float));
-                }
-
-                currIndex = curr->model.index.normIndex[j * TRIANGLE_VERTEX_COUNT + k];
-                currentVec = &curr->model.data.normal[currIndex * 3];
-                memcpy(&bufferContent[j * perTriangleFloatCount + k * VERTEX_FLOAT_COUNT_STRIDE + 5], currentVec, 3 * sizeof(float));
+                currIndex = model->index.texIndex[j * TRIANGLE_VERTEX_COUNT + k];
+                currentVec = &model->data.texture[currIndex * 2];
+                memcpy(&bufferContent[j * perTriangleFloatCount + k * VERTEX_FLOAT_COUNT_STRIDE + 3], currentVec, 2 * sizeof(float));
             }
+
+            currIndex = model->index.normIndex[j * TRIANGLE_VERTEX_COUNT + k];
+            currentVec = &model->data.normal[currIndex * 3];
+            memcpy(&bufferContent[j * perTriangleFloatCount + k * VERTEX_FLOAT_COUNT_STRIDE + 5], currentVec, 3 * sizeof(float));
         }
-        scene->memory.modelBuffers->vertexCount = curr->model.element.atTriangle * TRIANGLE_VERTEX_COUNT;
-        makeVertexBuffer(base, scene, i, bufferContent, ident, scene->memory.modelBuffers->vertexCount * VERTEX_FLOAT_COUNT_STRIDE, 16);
     }
 }

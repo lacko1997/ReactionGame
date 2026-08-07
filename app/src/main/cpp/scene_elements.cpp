@@ -10,7 +10,6 @@ static VkResult createTextureImage(EngineBase *base, SceneMemory *memory, uint32
 static VkResult createSampler(EngineBase *base, RenderScene *scene, uint32_t samplerIndex);
 static VkResult createBuffer(EngineBase *base, RenderScene*, uint32_t size, uint32_t index, VkBufferUsageFlags usage, VkBool32 instanceBuffer);
 static VkResult createVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t vertexFloatCount,uint32_t instanceFloatCount, uint32_t index);
-static VkResult createInstanceBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 static VkResult createIndexBuffer(EngineBase *base, RenderScene *scene, uint32_t indexCount, uint32_t index);
 static VkResult createUniformBuffer(EngineBase *base, RenderScene *scene, uint32_t floatCount, uint32_t index);
 static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene);
@@ -32,13 +31,13 @@ void makeTexture(EngineBase *base, RenderScene *scene, uint32_t textureCount, Te
 void makeVertexBuffer(EngineBase *base, RenderScene *scene, uint32_t index, float *vertexData, float *instanceData, uint32_t vertexFloatCount, uint32_t instanceFloatCount)
 {
     void *data;
-    CHECK_RESULT(createVertexBuffer(base, scene, vertexFloatCount, 16, index));
+    CHECK_RESULT(createVertexBuffer(base, scene, vertexFloatCount, instanceFloatCount, index));
     vkMapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory, 0, sizeof(float) * vertexFloatCount, 0, &data);
     memcpy(data, vertexData, sizeof(float) * vertexFloatCount);
     vkUnmapMemory(base->devBase.device, scene->memory.modelBuffers[index].vertexBufferMemory);
 
     vkMapMemory(base->devBase.device, scene->memory.modelBuffers[index].instanceBufferMemory, 0, sizeof(float) * instanceFloatCount, 0, &data);
-    memcpy(data, vertexData, sizeof(float) * vertexFloatCount);
+    memcpy(data, instanceData, sizeof(float) * instanceFloatCount);
     vkUnmapMemory(base->devBase.device, scene->memory.modelBuffers[index].instanceBufferMemory);
 };
 
@@ -242,6 +241,8 @@ static VkResult createIndexBuffer(EngineBase *base, RenderScene *scene, uint32_t
 
 static VkResult createDescriptorSets(EngineBase *base, RenderScene *scene)
 {
+    VkResult result;
+
     VkDescriptorSetAllocateInfo info;
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     info.pNext = NULL;
@@ -249,7 +250,44 @@ static VkResult createDescriptorSets(EngineBase *base, RenderScene *scene)
     info.pSetLayouts = &scene->pipeline.descriptorSetLayout;
     info.descriptorPool = scene->pipeline.descrPool;
 
-    return vkAllocateDescriptorSets(base->devBase.device, &info, scene->pipeline.descriptors);
+    result = vkAllocateDescriptorSets(base->devBase.device, &info, scene->pipeline.descriptors);
+    if(result == VK_SUCCESS)
+    {
+        VkDescriptorBufferInfo writeBuffers[2];
+        writeBuffers[0].offset = 0;
+        writeBuffers[0].range = 64;
+        writeBuffers[0].buffer = scene->memory.uniformBuffers[0];
+
+        VkWriteDescriptorSet write[2];
+        write[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write[0].pNext = NULL;
+        write[0].descriptorCount = 1;
+        write[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write[0].pBufferInfo = &writeBuffers[0];
+        write[0].dstArrayElement = 0;
+        write[0].dstBinding = 0;
+        write[0].dstSet = scene->pipeline.descriptors[0];
+        write[0].pImageInfo = NULL;
+        write[0].pTexelBufferView = NULL;
+
+        writeBuffers[1].offset = 0;
+        writeBuffers[1].range = 12;
+        writeBuffers[1].buffer = scene->memory.uniformBuffers[1];
+
+        write[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write[1].pNext = NULL;
+        write[1].descriptorCount = 1;
+        write[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write[1].pBufferInfo = &writeBuffers[1];
+        write[1].dstArrayElement = 0;
+        write[1].dstBinding = 1;
+        write[1].dstSet = scene->pipeline.descriptors[1];
+        write[1].pImageInfo = NULL;
+        write[1].pTexelBufferView = NULL;
+
+        vkUpdateDescriptorSets(base->devBase.device, 1, write, 0, NULL);
+    }
+    return result;
 }
 
 static VkResult createCommandBuffers(EngineBase *base, RenderScene *scene)

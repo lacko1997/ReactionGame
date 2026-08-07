@@ -33,11 +33,11 @@ static float viewMat[16] =
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 3.0, 1.0
+        0.0, 0.0, 13.0, 1.0
     };
 
 VkDebugUtilsMessengerEXT messenger;
-//#define DEBUG
+#define DEBUG
 void makeEngineBase(EngineBase *base)
 {
     __android_log_print(ANDROID_LOG_FATAL, "Vulkan", "Assert OK.");
@@ -609,38 +609,6 @@ void *mainLoop(void* args)
     result = vkCreateSemaphore(base->devBase.device, &semaphoreInfo[1], NULL, &submit);
     __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "Senmaphore Creation: %d", result);
 
-    VkDescriptorBufferInfo writeBuffers[2];
-    writeBuffers[0].offset = 0;
-    writeBuffers[0].range = 64;
-    writeBuffers[0].buffer = currentScene->memory.uniformBuffers[0];
-
-    VkWriteDescriptorSet write[2];
-    write[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write[0].pNext = NULL;
-    write[0].descriptorCount = 1;
-    write[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    write[0].pBufferInfo = &writeBuffers[0];
-    write[0].dstArrayElement = 0;
-    write[0].dstBinding = 0;
-    write[0].dstSet = currentScene->pipeline.descriptors[0];
-    write[0].pImageInfo = NULL;
-    write[0].pTexelBufferView = NULL;
-
-    writeBuffers[1].offset = 0;
-    writeBuffers[1].range = 12;
-    writeBuffers[1].buffer = currentScene->memory.uniformBuffers[1];
-
-    write[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write[1].pNext = NULL;
-    write[1].descriptorCount = 1;
-    write[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    write[1].pBufferInfo = &writeBuffers[1];
-    write[1].dstArrayElement = 0;
-    write[1].dstBinding = 1;
-    write[1].dstSet = currentScene->pipeline.descriptors[1];
-    write[1].pImageInfo = NULL;
-    write[1].pTexelBufferView = NULL;
-    __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "%X", currentScene->pipeline.descriptors[0]);
     VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submitInfo;
@@ -675,6 +643,10 @@ void *mainLoop(void* args)
     while(running)
     {
         alpha += 0.02f;
+        if(alpha > 3.1415926358 * 2)
+        {
+            alpha = 0.0f;
+        }
         cosa = cos(alpha);
         sina = sin(alpha);
 
@@ -686,14 +658,11 @@ void *mainLoop(void* args)
         memcpy(vertexUniforms, viewMat, 64);
         vkUnmapMemory(base->devBase.device, currentScene->memory.uniformBufferMemories[0]);
 
-        vkUpdateDescriptorSets(base->devBase.device, 1, write, 0, NULL);
-
         vkAcquireNextImageKHR(base->devBase.device, base->swapchain, UINT64_MAX, acquire, VK_NULL_HANDLE, &imgIndex);
         submitInfo.pCommandBuffers = &currentScene->pipeline.cmdBuffers[imgIndex];
         vkQueueSubmit(base->queue, 1, &submitInfo,VK_NULL_HANDLE);
 
         presentInfo.pImageIndices = &imgIndex;
-        __android_log_print(ANDROID_LOG_FATAL, "VULKAN", "%d", imgIndex);
         vkQueuePresentKHR(base->queue, &presentInfo);
     }
     return NULL;

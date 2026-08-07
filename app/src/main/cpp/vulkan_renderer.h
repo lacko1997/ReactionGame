@@ -47,6 +47,7 @@ typedef struct EngineBase
 typedef struct Model
 {
     uint32_t vertexCount;
+    uint32_t instanceCount;
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
     VkBuffer instanceBuffer;
